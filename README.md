@@ -52,7 +52,25 @@ core numbers; every other document elaborates without contradicting it.
 | 09 | [Tech Architecture](docs/design/09-tech-architecture.md) | Engine, deterministic sim core, data pipeline, testing, milestones |
 | 10 | [Art, Audio & Narrative](docs/design/10-art-audio-narrative.md) | Art & audio direction, world-building, tone bible, localization |
 
+## Playable prototype
+
+A deterministic, headless **core-loop prototype** lives in
+[`prototype/`](prototype/) — pure Python, no dependencies. It implements the
+tactical ruleset of docs 01–03 (Dread, Hunts, Composure with false Tells,
+Rites with Backfire-as-clue, the Field Journal, Challenge the ID) for six
+ghosts across three confusion pairs on the vignette farmhouse, with an
+interactive ASCII mode, an autoplaying Supervisor bot, and a 13-check test
+suite:
+
+```bash
+cd prototype
+python3 -m bravo_sim --auto --seed 4 --difficulty veteran --misid  # watch
+python3 -m bravo_sim --play                                        # play
+python3 -m bravo_sim --selftest                                    # verify
+```
+
 ## Status
 
-**Concept / pre-production.** This repository currently contains the design
-package (v0.1). All numeric values are tuning targets, not shipped balance.
+**Concept / pre-production.** This repository contains the design package
+(v0.1) and the Python design-validation prototype of the core loop. All
+numeric values are tuning targets, not shipped balance.
