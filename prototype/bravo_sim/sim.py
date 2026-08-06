@@ -82,7 +82,9 @@ class Sim:
         self.hunt = None            # dict(phase, last_seen, quiet_phases) or None
         self.prelude = False
         self.force_hunt = False     # Demon Wrath backfire rider
-        self.mark_pos_known = None
+        self.hosted = False         # Dybbuk: possessing the downed Alpha
+        self.quiet_until = 0        # Shade Absence backfire rider
+        self.marked = None          # Banshee: name of the Marked specialist
 
         # Rite state
         self.anchor_found = False   # room known (the hum)
@@ -101,6 +103,8 @@ class Sim:
         ]
         self.alpha = dict(pos=self.contract.alpha_pos, tagged=False,
                           rescued=False, carried_by=None)
+        if self.contract.true_ghost == "banshee":
+            self.marked = self.rng.choice([s.name for s in self.squad])
         self.property_damage = 0
         self.hum_rooms_visited = set()
         self._load_default_loadout()
@@ -297,6 +301,8 @@ class Sim:
                 return True, f"found {data.REAGENT_NAMES[item]}"
             return True, f"found {data.REAGENT_NAMES[item]} but hands are full"
         if what == "tag":
+            if self.hosted:
+                return True, "the body is not where you left it — it walks"
             if self.site.chebyshev(s.pos, self.alpha["pos"]) > 1 \
                     or self.alpha["tagged"]:
                 return True, "no one to tag"
@@ -380,6 +386,15 @@ class Sim:
             return False, "not carried or no AP"
         s.items.remove(item)
         self._make_noise(s.pos, 1)
+        rite = self.working_rite()
+        # Rite-reagent placement takes precedence at the confirmed Anchor
+        # (the Stillness Rite anchors objects with salt — 02, Poltergeist).
+        if rite and self.anchor_confirmed \
+                and self.site.chebyshev(s.pos, self.contract.anchor) <= 1 \
+                and item in rite["reagents"] \
+                and self.placed.get(item, 0) < rite["reagents"][item]:
+            self.placed[item] = self.placed.get(item, 0) + 1
+            return True, f"{data.REAGENT_NAMES[item]} placed at the Anchor"
         if item == "salt":
             self.site.salt_lines[s.pos] = {"state": "intact", "record": None}
             return True, f"salt line laid at {s.pos}"
@@ -422,6 +437,18 @@ class Sim:
             return lit, "the Anchor room is not lit"
         if sp == "dark":
             return not self.site.breaker_on, "site power must be off"
+        if sp == "marked_near":
+            m = self.spec(self.marked) if self.marked else None
+            ok = m is not None and m.mobile() and \
+                self.site.chebyshev(m.pos, self.contract.anchor) <= 2
+            # On a wrong-ID Sever there is no Mark; the rite proceeds — the
+            # Backfire is the teacher.
+            return (ok or self.contract.true_ghost != "banshee"), \
+                "the Marked must stand within 2 tiles of the effigy"
+        if sp == "lone":
+            near = [s for s in self.squad if s.mobile()
+                    and self.site.chebyshev(s.pos, self.contract.anchor) <= 6]
+            return len(near) == 1, "exactly one specialist may keep the vigil"
         return True, ""
 
     def act_channel(self, s):
@@ -491,6 +518,7 @@ class Sim:
         if s.carrying:
             return False, "already carrying"
         if self.alpha["tagged"] and not self.alpha["rescued"] and \
+                not self.hosted and \
                 self.alpha["carried_by"] is None and \
                 self.site.chebyshev(s.pos, self.alpha["pos"]) <= 1:
             if not self._spend(s, 1):
@@ -639,6 +667,11 @@ class Sim:
             self.banished = True
             self.hunt = None
             self.prelude = False
+            if self.hosted:          # Exorcism: the host survives (02, Dybbuk)
+                self.hosted = False
+                self.alpha["pos"] = self.gpos
+                self.log("* the Alpha collapses, breathing — the Dybbuk is "
+                         "driven out of its host.")
             self.log(f"* BANISHMENT. The {data.GHOSTS[wid]['name']} is dragged "
                      f"manifest to the Anchor and comes apart. The site goes quiet.")
         else:
@@ -673,6 +706,32 @@ class Sim:
             for s in self.squad:
                 if s.mobile():
                     s.lose_composure(10)
+        elif true == "poltergeist":
+            room = site.room(self.contract.anchor)
+            for s in self.squad:
+                if s.mobile() and site.room(s.pos) == room:
+                    s.hp -= 1        # Clutterstorm: 1 HP to all in the room
+        elif true == "banshee":
+            mobile = [s.name for s in self.squad if s.mobile()]
+            if mobile:
+                self.marked = self.rng.choice(mobile)
+        elif true == "revenant":
+            low = min((s for s in self.squad if s.mobile()),
+                      key=lambda s: s.composure, default=None)
+            if low:
+                low.lose_composure(10)
+        elif true == "shade":
+            self.quiet_until = self.round + 3
+        elif true == "draugr":
+            for p, k in site.kind.items():
+                if k == "door":
+                    site.door_open[p] = False
+                    site.jammed_doors.add(p)
+        elif true == "dybbuk":
+            if not self.hosted and not self.alpha["rescued"] \
+                    and self.alpha["carried_by"] is None:
+                self.hosted = True
+                self.gpos = self.alpha["pos"]
         # Immediate Hunt check at +25 (01 §8.3), Prelude still guaranteed.
         if self._hunt_check(bonus=25):
             self.prelude = True
@@ -737,10 +796,22 @@ class Sim:
                 s.gain_composure(3)
 
     def _hunt_check(self, bonus=0):
-        if self.contract.true_ghost == "demon":
+        g = self.contract.true_ghost
+        if g == "demon":
             threshold, sub, rolls = 40, 30, 2   # DM-1: doubled rolls
         else:
             threshold, sub, rolls = self.gdef["hunt_threshold"], 50, 1
+        if g == "dybbuk" and not self.hosted:
+            return False                        # DY-4: never hunts unhosted
+        if g == "shade" and not self._isolated_specialists():
+            return False                        # SH-4: needs an isolated mark
+        if g == "banshee":
+            m = self.spec(self.marked) if self.marked else None
+            if not (m and m.mobile()):          # BN: re-Mark, no hunt this phase
+                mobile = [s.name for s in self.squad if s.mobile()]
+                if mobile:
+                    self.marked = self.rng.choice(mobile)
+                return False
         if self.dread < threshold:
             return False
         target = self.dread - sub + bonus
@@ -769,7 +840,7 @@ class Sim:
             return 2 if site.light_level(self.gpos, self.round) == "lit" else 4
         if g == "jinn":
             return 4 if site.breaker_on else 2
-        if g == "yurei":
+        if g in ("yurei", "shade"):
             return 2
         return 3
 
@@ -785,8 +856,10 @@ class Sim:
             return 6 if site.breaker_on else 3
         if g == "demon":
             return 5
-        if g == "yurei":
-            return 3
+        if g == "revenant":
+            return 6                 # RV-2: LOS is its only accelerant
+        if g in ("yurei", "shade", "draugr"):
+            return 3                 # DG-1: it NEVER accelerates
         return 4
 
     def _ghost_move_toward(self, target, tiles):
@@ -811,17 +884,19 @@ class Sim:
             cost = 1
             k = self.site.kind.get(step)
             if k == "door" and not self.site.door_open[step]:
+                door_atoms = ["door_op"] \
+                    if "door_op" in self.gdef["possible"] else []
                 if through_walls:
                     pass
                 elif self.hunt:
                     cost = 2       # closed door costs the ghost 1 extra tile
                     self.site.door_open[step] = True
                     self.emit(step, 1, "a door swings open on its own",
-                              atoms=["door_op"])
+                              atoms=door_atoms)
                 else:
                     self.site.door_open[step] = True
                     self.emit(step, 1, "a door swings open on its own",
-                              atoms=["door_op"])
+                              atoms=door_atoms)
             if self.site.light_level(step, self.round) == "lit" \
                     and self.contract.true_ghost == "mare" and self.hunt:
                 cost += 1          # Mare: entering a lit tile costs extra
@@ -829,6 +904,8 @@ class Sim:
                 break
             budget -= cost
             self.gpos = step
+            if self.hosted:
+                self.alpha["pos"] = step   # the host walks
             moved.append(step)
             self._cross_salt(step)
         return moved
@@ -850,6 +927,13 @@ class Sim:
     # Calm behavior ---------------------------------------------------------
 
     def _calm_phase(self):
+        g = self.contract.true_ghost
+        if self.round < self.quiet_until:
+            return                   # Shade Absence: dead silence, Dread climbs
+        # Revenant: two-state stalker — 1-tile creep, 6-tile sprint on sight.
+        if g == "revenant":
+            self._revenant_calm()
+            return
         # Interest: noise >= 3 -> seen specialist -> anchor drift (01 §3)
         target = None
         if self.g_noise_heard:
@@ -864,16 +948,68 @@ class Sim:
                 target = seen[0].pos
         if target is None:
             target = self.contract.anchor
+        # Per-ghost interest overrides.
+        if g == "banshee" and self.marked:
+            m = self.spec(self.marked)
+            if m and m.mobile():
+                target = m.pos       # BN-1: she attends a person, not a place
+        if g == "dybbuk" and not self.hosted and not self.alpha["rescued"] \
+                and self.alpha["carried_by"] is None:
+            target = self.alpha["pos"]   # DY-1: it drifts to the bodies
+        # Tethers: Yurei 6 (YU-3), Draugr 8 (DG-4).
+        tether = {"yurei": 6, "draugr": 8}.get(g)
+        if tether and self.site.chebyshev(target, self.contract.anchor) > tether:
+            target = self.contract.anchor
         prev = self.gpos
-        # Yurei: tether radius 6 (YU-3).
-        if self.contract.true_ghost == "yurei":
-            if self.site.chebyshev(target, self.contract.anchor) > 6:
-                target = self.contract.anchor
         moved = self._ghost_move_toward(target, self._ghost_speed())
         self._movement_evidence(prev, moved)
+        # Dybbuk possession: reaching the body, it takes it (DY-2).
+        if g == "dybbuk" and not self.hosted and not self.alpha["rescued"] \
+                and self.alpha["carried_by"] is None \
+                and self.site.chebyshev(self.gpos, self.alpha["pos"]) <= 1:
+            self.hosted = True
+            self.gpos = self.alpha["pos"]
+            self.emit(self.gpos, 4, "the downed Alpha convulses, stands, "
+                      "and walks", atoms=["possession"])
+            return
+        if g == "shade" and self._squad_grouped_near():
+            return                   # SH-1: company silences it
         budget = 2 if self.dread >= 25 else 1
         for _ in range(budget):
             self._interaction()
+
+    def _squad_grouped_near(self):
+        """SH-1: 2+ mobile specialists within 6 of the Shade and each other."""
+        near = [s for s in self.squad if s.mobile()
+                and self.site.chebyshev(s.pos, self.gpos) <= 6]
+        return len(near) >= 2 and any(
+            self.site.chebyshev(a.pos, b.pos) <= 6
+            for a in near for b in near if a is not b)
+
+    def _revenant_calm(self):
+        prev = self.gpos
+        seen = [s for s in self.squad if s.mobile() and not s.hidden
+                and self.site.chebyshev(self.gpos, s.pos) <= 8
+                and self.site.los(self.gpos, s.pos)]
+        if seen:
+            t = min(seen, key=lambda s: self.site.chebyshev(self.gpos, s.pos))
+            moved = self._ghost_move_toward(t.pos, 6)
+            if moved:
+                self.emit(self.gpos, 2,
+                          "movement traces: " + data.ATOM_TEXT["los_sprint"],
+                          atoms=["los_sprint"])
+        else:
+            tgt = self.contract.anchor
+            if self.g_noise_heard:
+                tgt = max(self.g_noise_heard, key=lambda x: x[1])[0]
+            moved = self._ghost_move_toward(tgt, 1)
+            if moved and self.rng.random() < 0.5:
+                self.emit(self.gpos, 2,
+                          "movement traces: " + data.ATOM_TEXT["slow_creep"],
+                          atoms=["slow_creep"])
+        self._movement_evidence(prev, [])   # no generic speed reads
+        if self.rng.random() < 0.25:
+            self.emit(self.gpos, 3, "a long scraping drag", atoms=["whisper"])
 
     def _movement_evidence(self, prev, moved):
         """Speed/temperature/darkness reads on perceived traces (Tell layer)."""
@@ -896,7 +1032,7 @@ class Sim:
                 atom = "warm_slow"
             elif temp <= 8:
                 atom = "fast_cold"
-        elif g in ("demon", "mare", "jinn", "wraith", "yurei") and temp >= 20:
+        elif g != "hantu" and temp >= 20:
             atom = "temp_flat"
         if g == "mare" and site.light_level(self.gpos, self.round) == "dark" \
                 and len(moved) >= 3:
@@ -1019,6 +1155,83 @@ class Sim:
                           atoms=["whisper"])
             else:
                 self.emit(self.gpos, 1, "a door eases shut", atoms=["door_op"])
+        elif g == "poltergeist":
+            if r < 0.35:
+                self.emit(self.gpos, 4, "a BARRAGE — plates, books, a chair, "
+                          "all at once", atoms=["multi_throw"])
+            elif r < 0.55:
+                self.emit(self.gpos, 2, "loose objects begin to vibrate",
+                          atoms=["rattle_precursor"])
+            elif r < 0.8:
+                self.emit(self.gpos, 3, "a cup shatters against the wall",
+                          atoms=["single_throw"])
+            else:
+                self.emit(self.gpos, 3, "a gleeful rapping in the walls",
+                          atoms=["whisper"])
+        elif g == "banshee":
+            m = self.spec(self.marked) if self.marked else None
+            if r < 0.45 and m and m.mobile():
+                m.lose_composure(10)
+                self.emit(m.pos, 3, f"a keening wail — only {m.name} doubles "
+                          f"over", atoms=["keening"])
+            elif r < 0.7:
+                self.emit(self.gpos, 3, "a low mourning hum",
+                          atoms=["whisper"])
+            else:
+                self.emit(self.gpos, 2, "a locket slides from a shelf",
+                          atoms=["single_throw"])
+        elif g == "shade":
+            lone = [s for s in self.squad if s.mobile() and not s.hidden
+                    and self.site.chebyshev(s.pos, self.gpos) <= 5
+                    and not any(o is not s and o.mobile()
+                                and self.site.chebyshev(o.pos, s.pos) <= 6
+                                for o in self.squad)]
+            if r < 0.5 and lone:
+                v = lone[0]
+                v.lose_composure(8)
+                self.emit(v.pos, 0, f"a grey figure, gone when {v.name} "
+                          f"blinks — no one else saw it",
+                          atoms=["lone_manifest"])
+            elif r < 0.7:
+                self.emit(self.gpos, 2, "a candle snuffs by itself",
+                          atoms=["whisper"])
+            else:
+                self.emit(self.gpos, 1, "the faintest nudge of a cup",
+                          atoms=["single_throw"])
+        elif g == "draugr":
+            if r < 0.3:
+                doors = [p for p, k in self.site.kind.items() if k == "door"
+                         and self.site.chebyshev(p, self.contract.anchor) <= 8
+                         and p not in self.site.jammed_doors]
+                if doors:
+                    d = doors[self.rng.randrange(len(doors))]
+                    self.site.door_open[d] = False
+                    self.site.jammed_doors.add(d)
+                    self.emit(d, 3, "a door slams and JAMS",
+                              atoms=["jammed_doors"])
+                    return
+            if r < 0.55:
+                self.emit(self.gpos, 4, "heavy tread — the floor trembles",
+                          atoms=["thud"])
+            elif r < 0.75:
+                self.emit(self.gpos, 4, "a wardrobe topples where it stood",
+                          atoms=["furniture_topple"])
+            else:
+                self.emit(self.gpos, 3, "a guttural muttering",
+                          atoms=["whisper"])
+        elif g == "dybbuk":
+            near_body = not self.alpha["rescued"] and \
+                self.site.chebyshev(self.gpos, self.alpha["pos"]) <= 4
+            if r < 0.4 and near_body and not self.hosted:
+                self.emit(self.alpha["pos"], 3,
+                          "broken speech near the body: 'help — me — up'",
+                          atoms=["whisper_mimicry"])
+            elif r < 0.65:
+                self.emit(self.gpos, 2, "a soft, single throw",
+                          atoms=["single_throw"])
+            else:
+                self.emit(self.gpos, 3, "a clinging whisper",
+                          atoms=["whisper"])
 
     # Hunt behavior ---------------------------------------------------------
 
@@ -1050,13 +1263,30 @@ class Sim:
         elif h["phase"] >= h["duration"]:
             self._end_hunt("the fury burns out")
 
+    def _isolated_specialists(self):
+        return [s for s in self.squad if s.mobile()
+                and not any(o is not s and o.mobile()
+                            and self.site.chebyshev(o.pos, s.pos) <= 6
+                            for o in self.squad)]
+
     def _hunt_target(self):
         """(specialist_or_None, pos_or_None): seen -> last_seen -> noise."""
         h = self.hunt
+        g = self.contract.true_ghost
         vis = [s for s in self.squad if s.mobile() and not s.hidden
                and self.site.chebyshev(self.gpos, s.pos) <= 6
                and self.site.los(self.gpos, s.pos)
                and self.site.room(s.pos) != "Van"]
+        if g == "banshee":          # BN-3: she walks past everyone else
+            vis = [s for s in vis if s.name == self.marked]
+            m = self.spec(self.marked) if self.marked else None
+            if m and m.mobile() and not m.hidden:
+                h["last_seen"] = m.pos
+                return m, m.pos     # she always knows where the Marked is
+            return None, h["last_seen"]
+        if g == "shade":            # SH-4: lone specialists only
+            iso = self._isolated_specialists()
+            vis = [s for s in vis if s in iso]
         # A hidden specialist it saw enter, or who makes noise, is fair game.
         for s in self.squad:
             if s.hidden and s.hide_seen:
@@ -1077,6 +1307,17 @@ class Sim:
         return None, None
 
     def _strike(self, target):
+        # Refuge (01 §6.4): during an all-channel rite the chalk circle
+        # blocks one strike per Hunt aimed at anyone standing in it.
+        rite = self.working_rite()
+        if rite and rite["special"] == "all_channel" and self.hunt \
+                and not self.hunt.get("refuge_used") \
+                and (self.channel_banked > 0 or self.channel_inflight) \
+                and self.site.chebyshev(target.pos, self.contract.anchor) <= 1:
+            self.hunt["refuge_used"] = True
+            self.log(f"!! the chalk circle flares — the strike aimed at "
+                     f"{target.name} is turned aside.")
+            return
         if target.hidden:
             target.hidden = False
         dmg = 6 - (2 if target.steadied else 0)

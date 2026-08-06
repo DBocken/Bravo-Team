@@ -27,6 +27,9 @@ python3 -m bravo_sim --auto --difficulty veteran --misid --ghost demon
 
 # Run the test suite (13 checks, incl. end-to-end bot runs on all tiers)
 python3 -m bravo_sim --selftest
+
+# Monte Carlo balance farm in miniature (doc 09): N seeds per difficulty
+python3 -m bravo_sim --stats 20
 ```
 
 Same seed + same flags ⇒ byte-identical transcript (a selftest asserts it).
@@ -62,9 +65,18 @@ Same seed + same flags ⇒ byte-identical transcript (a selftest asserts it).
 - **Contract generation** (03 §2): misID only from the signature confusion
   pair, Veteran loose-thread log line, Blackout with no claim and mandatory
   filing.
-- **Six ghosts — three full confusion pairs** with distinct behavior models,
-  rites and Backfire riders: Hantu↔Demon (temperature vs. aggression),
-  Mare↔Jinn (bulbs vs. current), Wraith↔Yurei (translocation vs. tether).
+- **All twelve launch ghosts — the six locked confusion pairs** with
+  distinct behavior models, rites and Backfire riders: Hantu↔Demon
+  (temperature vs. aggression), Mare↔Jinn (bulbs vs. current), Wraith↔Yurei
+  (translocation vs. tether), Revenant↔Draugr (two-state LOS sprint vs. the
+  zone-bound brute that jams doors), Shade↔Banshee (isolation-triggered vs.
+  the Mark that follows one specialist), Poltergeist↔Dybbuk (the multi-throw
+  barrage vs. **possession of the downed Alpha** — hosted Hunts, and an
+  Exorcism that ends with the host alive).
+- Rite special conditions as gameplay: the Naming's all-channel circle with
+  its Refuge ward, the Sever's Marked-at-the-effigy bait, the Lone Vigil's
+  exactly-one-within-six rule, the Warming/Illumination/Smokeless
+  environment gates.
 - **Scoring** (01 §10.4): base fee, difficulty multipliers, Alpha rescue,
   no-down/Dread/Hunt/Clean-Journal bonuses, Withdraw call-out fee.
 
@@ -80,8 +92,8 @@ is exactly where the design says the ceiling should be.
 
 Documented so nobody mistakes them for design changes:
 
-- 6 of 12 ghosts; one site (the vignette farmhouse) with seeded Anchor/Alpha
-  variation instead of full procedural layouts.
+- One site (the vignette farmhouse) with seeded Anchor/Alpha variation
+  instead of full procedural layouts.
 - Evidence is modeled as discrete atoms per ghost rather than the full Tell
   taxonomy; report authoring uses a fixed line pool per ghost (no crew
   voices, no Nightmare corruption table).
@@ -91,8 +103,12 @@ Documented so nobody mistakes them for design changes:
 - The van stocks a staples crate (HQ-only reagents) so a mid-contract
   Challenge is never a dead end — the generation-time solvability validator
   of 03 §2.3 stands in for loadout planning.
-- No Dybbuk possession, no perma-death consequences beyond the flag, no
-  Office meta; the contract is the whole loop here.
+- Some rite sub-mechanics are flattened to their reagent cost: the
+  Poltergeist's favorite-object marking, the Revenant relic escort, the
+  Draugr grave-goods recovery, on-site effigy crafting; the Exorcism
+  anchors at the vessel-object while possession plays out as behavior.
+- No Office meta, no perma-death consequences beyond the flag; the
+  contract is the whole loop here.
 
 ## Layout
 

@@ -89,7 +89,8 @@ HELP = """commands (specialists: v=Vance o=Okafor l=Lis; tiles: x,y):
   interact <s> <furnace|breaker|light|search|tag|inspect|salt_check|crate> [x,y]
   take <s> <item>     place <s> <item>     channel <s>
   pickup <s> <x,y>    lift <s> | lower <s>
-  challenge <ghost>   (hantu demon mare jinn wraith yurei)
+  challenge <ghost>   (hantu demon mare jinn wraith yurei
+                       poltergeist banshee revenant shade draugr dybbuk)
   auto                (hand this contract to the bot)
 """
 

@@ -60,25 +60,31 @@ WINDOWS = [(0, 2), (23, 2), (23, 6), (0, 10), (23, 10)]
 
 # Per-ghost Anchor candidate tiles (placement logic per 02-ghost-roster.md).
 ANCHOR_SPOTS = {
-    "hantu":  [(1, 5), (4, 7)],     # coldest room: the cellar
-    "demon":  [(8, 12), (14, 9)],   # pact-object near the threshold: foyer
-    "mare":   [(22, 1), (22, 3)],   # the den nest: bedroom
-    "jinn":   [(13, 1), (18, 1)],   # beside wiring: mudroom
-    "wraith": [(17, 9), (22, 12)],  # omen-object: study
-    "yurei":  [(22, 5), (17, 7)],   # tether in the water room: bathroom
+    "hantu":       [(1, 5), (4, 7)],     # coldest room: the cellar
+    "demon":       [(8, 12), (14, 9)],   # pact-object near the threshold: foyer
+    "mare":        [(22, 1), (22, 3)],   # the den nest: bedroom
+    "jinn":        [(13, 1), (18, 1)],   # beside wiring: mudroom
+    "wraith":      [(17, 9), (22, 12)],  # omen-object: study
+    "yurei":       [(22, 5), (17, 7)],   # tether in the water room: bathroom
+    "poltergeist": [(1, 12), (6, 9)],    # its favorite clutter: the living room
+    "banshee":     [(1, 10), (6, 11)],   # the effigy stands in the living room
+    "revenant":    [(8, 1), (10, 1)],    # burial plot staged off the pantry
+    "shade":       [(9, 3), (8, 3)],     # hearth-side comfort object, pantry
+    "draugr":      [(16, 9), (21, 12)],  # the disturbed barrow: study cache
+    "dybbuk":      [(20, 1), (21, 3)],   # vessel-object beside the bodies
 }
 
 ALPHA_SPOTS = [(21, 2), (1, 7), (20, 12)]
 
 # Searchable furniture: tile -> list of yields (popped in order, 1 per search).
 SEARCH_YIELDS = {
-    (5, 3):   ["salt", "votive"],
-    (2, 7):   ["brazier_coals", "lamp_oil"],
-    (9, 7):   ["salt", "cleansing_bundle"],
-    (11, 7):  ["votive", "brazier_coals"],
-    (3, 11):  ["votive", "lamp_oil"],
-    (18, 11): ["grave_soil", "grave_soil"],
-    (20, 11): ["grave_soil", "grave_soil"],
+    (5, 3):   ["salt", "votive", "woven_effigy"],
+    (2, 7):   ["brazier_coals", "lamp_oil", "iron_filings"],
+    (9, 7):   ["salt", "cleansing_bundle", "votive"],
+    (11, 7):  ["votive", "brazier_coals", "salt"],
+    (3, 11):  ["votive", "lamp_oil", "woven_effigy"],
+    (18, 11): ["grave_soil", "grave_soil", "iron_filings"],
+    (20, 11): ["grave_soil", "grave_soil", "iron_filings"],
 }
 # When the true ghost is the Demon, its name-fragments spawn in these searches
 # (02-ghost-roster.md Naming rite; spawn rules simplified for the prototype).

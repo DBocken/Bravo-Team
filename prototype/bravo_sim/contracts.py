@@ -47,6 +47,42 @@ LOG_LINES = {  # in-fiction Activity Log lines encoding true Tells (atom or None
         ("02:50 all activity inside the same few rooms — it doesn't range", None),
         ("03:07 not a single object thrown all night", None),
     ],
+    "poltergeist": [
+        ("02:05 three plates airborne AT ONCE. three", "multi_throw"),
+        ("02:22 the junk room is a warzone, the tidy rooms are silent", None),
+        ("02:39 cutlery drawer buzzing a full minute before it blew", "rattle_precursor"),
+        ("02:56 it works the rooms, not us — never came at anyone", None),
+    ],
+    "banshee": [
+        ("02:03 it's fixed on M. — every event lands on her, nobody else", "keening"),
+        ("02:24 wail again. only M. doubled over, we felt nothing", "keening"),
+        ("02:47 it walked PAST me to get to her", None),
+        ("03:02 rest of us might as well be furniture", None),
+    ],
+    "revenant": [
+        ("02:11 slowest trace I've ever logged. one meter a minute, maybe", "slow_creep"),
+        ("02:29 D. rounded a corner into its eyeline. it CLOSED, fast", "los_sprint"),
+        ("02:48 no prints — a single scored drag-line in the dust", "drag_marks"),
+        ("03:04 lights, doors, temperature: all clean. it only wants us", None),
+    ],
+    "shade": [
+        ("02:08 site went dead quiet the moment we grouped up", None),
+        ("02:26 K. saw it in the pantry — alone. it was gone when I got there", "lone_manifest"),
+        ("02:44 activity keeps drifting to whichever wing we're not in", None),
+        ("03:00 quietest hostile I've ever filed. barely an event log", None),
+    ],
+    "draugr": [
+        ("02:06 mudroom door jammed like it was welded. took both of us", "jammed_doors"),
+        ("02:23 heavy tread through the floor. shelves trembling", "thud"),
+        ("02:41 everything happens inside the same stretch of rooms", None),
+        ("02:57 prints in the salt an inch deep. straight through", "deep_prints"),
+    ],
+    "dybbuk": [
+        ("02:09 whispers by the downed crew — half-words, like speech", "whisper_mimicry"),
+        ("02:31 I swear the body had MOVED when we came back", None),
+        ("02:49 single throws only, soft ones. it's not the objects it wants", None),
+        ("03:05 it keeps circling the stretcher room", None),
+    ],
 }
 
 LOOSE_THREADS = {  # misID: one in-voice line inconsistent with the CLAIM (03 §2.3)
@@ -56,6 +92,12 @@ LOOSE_THREADS = {  # misID: one in-voice line inconsistent with the CLAIM (03 §
     ("jinn", "mare"):   "02:58 generator was off an hour and it never slowed down",
     ("wraith", "yurei"): "02:58 salt by the door came up wet. prints, almost",
     ("yurei", "wraith"): "02:58 J. swears it crossed the hallway without touching the wet floor",
+    ("revenant", "draugr"): "02:58 never once saw it leave that wing, sprint or no sprint",
+    ("draugr", "revenant"): "02:58 odd — it followed D. clear across the site once",
+    ("shade", "banshee"): "02:58 quiet, sure, but K. got hit through a full huddle",
+    ("banshee", "shade"): "02:58 the 'fixation' went silent every time we bunched up",
+    ("poltergeist", "dybbuk"): "02:58 for all the racket, never two objects at once",
+    ("dybbuk", "poltergeist"): "02:58 it hurled half the kitchen and ignored the stretcher room",
 }
 
 

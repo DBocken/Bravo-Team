@@ -9,10 +9,12 @@ holds the Rite, and extracts. Used by `--auto`, the demo, and the selftests.
 from . import data
 from .world import FURNACE_POS, BREAKER_POS, ANCHOR_SPOTS, FRAGMENT_TILES
 
-SWEEP_ROOMS = ["Cellar", "Foyer", "Bedroom", "Mudroom", "Study", "Bathroom"]
+SWEEP_ROOMS = ["Foyer", "Living", "Cellar", "Pantry", "Bedroom", "Mudroom",
+               "Study", "Bathroom"]
 SWEEP_TARGETS = {
     "Cellar": (2, 6), "Foyer": (11, 10), "Bedroom": (21, 2),
     "Mudroom": (15, 2), "Study": (19, 10), "Bathroom": (20, 6),
+    "Living": (3, 10), "Pantry": (9, 2),
 }
 SALT_SPOTS = [(8, 6), (13, 6)]      # hall chokepoints
 FLEE_SPOTS = [(11, 10), (3, 10), (20, 10), (2, 2)]
@@ -71,9 +73,10 @@ class Bot:
         cut = len(plan)
         for i, p in enumerate(plan):
             if site.kind.get(p) == "door" and not site.door_open[p]:
-                if site.chebyshev(s.pos, p) <= 1 and \
-                        p not in site.jammed_doors:
-                    sim.act_door(s, p)   # free door op
+                if site.chebyshev(s.pos, p) <= 1:
+                    sim.act_door(s, p)   # free op; a jammed door costs 2 AP
+                    if not site.door_open[p]:
+                        return False     # couldn't force it this action
                 else:
                     cut = i
                 break
@@ -396,6 +399,8 @@ class Bot:
         sp = rite["special"]
         anchor = sim.contract.anchor
         room = sim.site.room(anchor)
+        vigil_exile = max(FLEE_SPOTS,
+                          key=lambda p: sim.site.chebyshev(p, anchor))
         # Satisfy the special condition with the Warden.
         if okafor.mobile():
             handled = False
@@ -406,6 +411,12 @@ class Bot:
             elif sp == "dark" and sim.site.breaker_on:
                 if self.goto(okafor, BREAKER_POS, adj=True) and okafor.ap > 0:
                     sim.act_interact(okafor, "breaker", BREAKER_POS)
+                handled = True
+            elif sp == "lone":
+                # The vigil is kept alone — everyone else beyond 6 tiles.
+                self.goto(okafor, vigil_exile)
+                if okafor.ap > 0:
+                    sim.act_steady(okafor)
                 handled = True
             elif sp == "lit" and \
                     sim.site.light_level(anchor, sim.round) != "lit":
@@ -431,13 +442,45 @@ class Bot:
             if not handled:
                 self.guard(okafor)
         if sp == "all_channel":
+            # Wards pre-laid (02, Naming): salt on the approaches first.
+            near_lines = [p for p in sim.site.salt_lines
+                          if sim.site.chebyshev(p, anchor) <= 3
+                          and sim.site.salt_lines[p]["state"] == "intact"]
+            if len(near_lines) < 2:
+                holder = next((x for x in (okafor, lis, vance)
+                               if x.mobile() and "salt" in x.items), None)
+                if holder is not None:
+                    spot = next(
+                        (q for q in sorted(
+                            sim.site.room_of,
+                            key=lambda q: sim.site.chebyshev(q, holder.pos))
+                         if 2 <= sim.site.chebyshev(q, anchor) <= 3
+                         and sim.site.room(q) == room
+                         and q not in sim.site.salt_lines
+                         and sim.site.walkable(q)), None)
+                    if spot and self.goto(holder, spot) and holder.ap > 0 \
+                            and holder.pos == spot:
+                        sim.act_place(holder, "salt")
+                        return
             chans = [s for s in (vance, okafor, lis) if s.mobile()]
         else:
             chans = [vance if vance.mobile() else
                      (lis if lis.mobile() else okafor)]
-            if lis.mobile() and lis not in chans:
-                if self.goto(lis, anchor, adj=True) and lis.ap > 0:
-                    sim.act_steady(lis)
+            if sp == "lone":
+                if lis.mobile() and lis not in chans:
+                    self.goto(lis, vigil_exile)
+                    if lis.ap > 0:
+                        sim.act_steady(lis)
+            else:
+                # The Marked must stand by the effigy (Sever the Bond).
+                m = sim.spec(sim.marked) if sim.marked else None
+                if sp == "marked_near" and m and m.mobile() \
+                        and m not in chans:
+                    if self.goto(m, anchor, adj=True) and m.ap > 0:
+                        sim.act_steady(m)
+                if lis.mobile() and lis not in chans and lis is not m:
+                    if self.goto(lis, anchor, adj=True) and lis.ap > 0:
+                        sim.act_steady(lis)
         all_in = True
         for s in chans:
             if not self.goto(s, anchor, adj=True):

@@ -198,7 +198,7 @@ def _bot_misid():
                 break
         if done:
             solved += 1
-    assert solved >= 5, f"misID solved for only {solved}/6 ghosts"
+    assert solved >= 10, f"misID solved for only {solved}/12 ghosts"
 
 
 def run():

@@ -57,10 +57,12 @@ core numbers; every other document elaborates without contradicting it.
 A deterministic, headless **core-loop prototype** lives in
 [`prototype/`](prototype/) — pure Python, no dependencies. It implements the
 tactical ruleset of docs 01–03 (Dread, Hunts, Composure with false Tells,
-Rites with Backfire-as-clue, the Field Journal, Challenge the ID) for six
-ghosts across three confusion pairs on the vignette farmhouse, with an
-interactive ASCII mode, an autoplaying Supervisor bot, and a 13-check test
-suite:
+Rites with Backfire-as-clue, the Field Journal, Challenge the ID) for **all
+twelve launch ghosts across the six confusion pairs** — including the
+Banshee's Mark, the Draugr's zone, the Shade's isolation trigger and the
+Dybbuk possessing a downed Alpha — on the vignette farmhouse, with an
+interactive ASCII mode, an autoplaying Supervisor bot, a Monte Carlo stats
+mode, and a 13-check test suite:
 
 ```bash
 cd prototype

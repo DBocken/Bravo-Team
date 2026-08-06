@@ -1,9 +1,10 @@
 """Data-driven ghost definitions (09-tech-architecture.md: content as data).
 
-Prototype scope: 6 of the 12 launch ghosts — three full confusion pairs
-(Hantu<->Demon, Mare<->Jinn, Wraith<->Yurei) from canon §8. Evidence is
-modeled as atoms; a ghost is consistent with the Journal iff every Confirmed
-atom is in its `possible` set (02-ghost-roster.md Tell matrix, §5).
+The full 12-ghost launch roster — all six locked confusion pairs from canon
+§8 (Hantu<->Demon, Mare<->Jinn, Wraith<->Yurei, Revenant<->Draugr,
+Shade<->Banshee, Poltergeist<->Dybbuk). Evidence is modeled as atoms; a
+ghost is consistent with the Journal iff every Confirmed atom is in its
+`possible` set (02-ghost-roster.md Tell matrix, §5).
 """
 
 # Human-readable evidence text per atom.
@@ -34,6 +35,25 @@ ATOM_TEXT = {
     "aura_drain":      "composure bleeding with no event on screen",
     "water_sign":      "taps running; water pooling",
     "wet_prints":      "wet bare footprints across the salt line",
+    "multi_throw":     "two or more objects thrown in the same beat — a barrage",
+    "rattle_precursor": "loose objects vibrating a full turn before anything moves",
+    "keening":         "a wail aimed at exactly one specialist — only they feel it",
+    "slow_creep":      "traces crawling at a single tile per phase — nothing else is this slow",
+    "los_sprint":      "it SAW someone and covered six tiles in a blink",
+    "drag_marks":      "a continuous scored drag-line through the salt, no footprints",
+    "jammed_doors":    "a door jammed shut with inhuman strength",
+    "thud":            "heavy tread — thudding through the floor, clutter trembling",
+    "deep_prints":     "deep pressed prints straight through the salt line",
+    "lone_manifest":   "it showed itself — but only once its witness was alone",
+    "whisper_mimicry": "broken speech near the bodies: 'help — me — up'",
+    "possession":      "a downed Alpha stands up and walks",
+    "furniture_topple": "heavy furniture toppled where it stood — not thrown, pushed",
+    "backfire_poltergeist": "BACKFIRE — Clutterstorm: every loose object in reach hurled outward at once",
+    "backfire_banshee": "BACKFIRE — Keening: a sustained shriek fixes on the enactor; the Mark has moved",
+    "backfire_revenant": "BACKFIRE — Dead Sprint: it locks eyes with the channeler and rushes, stopping one tile short",
+    "backfire_shade":  "BACKFIRE — Absence: all activity ceases while the Dread keeps climbing",
+    "backfire_draugr": "BACKFIRE — Hoard-Call: every door on site slams and jams at once",
+    "backfire_dybbuk": "BACKFIRE — Host Lurch: it dives for the body and takes it",
     "backfire_hantu":  "BACKFIRE — Hearth-Theft: every flame snuffs; frost blooms across the Anchor room",
     "backfire_demon":  "BACKFIRE — Wrath: one silent beat, then the Hunt comes regardless of Dread",
     "backfire_mare":   "BACKFIRE — Total Dark: the breaker trips and every fixture dies",
@@ -115,6 +135,76 @@ GHOSTS = {
                             "votive": 2},
                   special="manifest_t2"),  # she manifests inside the sigil
     ),
+    "poltergeist": dict(
+        name="Poltergeist",
+        possible=["whisper", "single_throw", "door_op", "multi_throw",
+                  "rattle_precursor", "temp_flat", "prints_normal",
+                  "backfire_poltergeist"],
+        partner="dybbuk",
+        hunt_threshold=60, hunt_duration=3,
+        salt_record="prints_normal", crosses_salt=True,
+        rite=dict(name="Stillness Rite", length=2,
+                  reagents={"salt": 3, "iron_filings": 3},
+                  special=None),
+    ),
+    "banshee": dict(
+        name="Banshee",
+        possible=["whisper", "single_throw", "door_op", "keening",
+                  "temp_flat", "prints_normal", "backfire_banshee"],
+        partner="shade",             # BN-4 (N): no site-wide events
+        hunt_threshold=55, hunt_duration=3,
+        salt_record="prints_normal", crosses_salt=True,
+        rite=dict(name="Sever the Bond", length=3,
+                  reagents={"woven_effigy": 1, "votive": 2},
+                  special="marked_near"),  # the Marked within 2 of the effigy
+    ),
+    "revenant": dict(
+        name="Revenant",
+        possible=["whisper", "single_throw", "slow_creep", "los_sprint",
+                  "drag_marks", "temp_flat", "backfire_revenant"],
+        partner="draugr",            # RV-4 (N): no door_op, no environment
+        hunt_threshold=60, hunt_duration=4,
+        salt_record="drag_marks", crosses_salt=True,
+        rite=dict(name="Reburial", length=3,
+                  reagents={"grave_soil": 2, "consecrated_water": 1},
+                  special=None),
+    ),
+    "shade": dict(
+        name="Shade",
+        possible=["whisper", "single_throw", "lone_manifest", "temp_flat",
+                  "prints_normal", "backfire_shade"],
+        partner="banshee",           # SH-4 (N): never acts near groups
+        hunt_threshold=85, hunt_duration=2,
+        salt_record="prints_normal", crosses_salt=True,
+        rite=dict(name="Lone Vigil", length=4,
+                  reagents={"votive": 3, "cleansing_bundle": 1},
+                  special="lone"),   # exactly one specialist within 6 tiles
+    ),
+    "draugr": dict(
+        name="Draugr",
+        possible=["whisper", "door_op", "jammed_doors", "thud",
+                  "furniture_topple", "deep_prints", "temp_flat",
+                  "backfire_draugr"],
+        partner="revenant",          # DG-4 (N): never throws across a room
+        hunt_threshold=60, hunt_duration=5,
+        salt_record="deep_prints", crosses_salt=True,
+        rite=dict(name="Re-interment", length=3,
+                  reagents={"grave_soil": 2, "iron_filings": 2},
+                  special=None),
+    ),
+    "dybbuk": dict(
+        name="Dybbuk",
+        possible=["whisper", "single_throw", "door_op", "whisper_mimicry",
+                  "possession", "temp_flat", "prints_normal",
+                  "backfire_dybbuk"],
+        partner="poltergeist",       # DY-4 (N): never multi-throws
+        hunt_threshold=60, hunt_duration=3,   # hosted only (02 roster)
+        salt_record="prints_normal", crosses_salt=True,
+        rite=dict(name="Exorcism", length=3,
+                  reagents={"votive": 4, "consecrated_water": 1,
+                            "cleansing_bundle": 1},
+                  special=None),
+    ),
 }
 
 GHOST_KEYS = list(GHOSTS)
@@ -125,7 +215,8 @@ REAGENT_NAMES = {
     "consecrated_water": "Consecrated Water", "mirror_ward": "Mirror Ward",
     "grave_soil": "Grave Soil", "votive": "Votive Candles",
     "cleansing_bundle": "Cleansing Bundle", "name_fragment": "Name-Fragment",
-    "lantern": "Lantern",
+    "lantern": "Lantern", "iron_filings": "Iron Filings",
+    "woven_effigy": "Woven Effigy",
 }
 
 # The van's staples crate (prototype convenience, documented deviation):
