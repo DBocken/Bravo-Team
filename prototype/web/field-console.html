@@ -114,6 +114,21 @@ canvas{display:block;margin:0 auto;width:100%;max-width:624px;height:auto;
 #modal h2{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--hazard);margin-bottom:12px}
 #modal .body{font-family:var(--mono);font-size:12.5px;line-height:1.8;white-space:pre-wrap}
 #modal .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:flex-end}
+/* tutorial */
+#tutcard{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:90;
+  background:var(--panel);border:1px solid var(--hazard);border-radius:5px;
+  max-width:520px;width:calc(100vw - 24px);padding:12px 14px;display:none;
+  box-shadow:0 6px 30px rgba(0,0,0,.6)}
+#tutcard.on{display:block}
+#tutcard .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+#tutcard .step{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--hazard)}
+#tutcard .skip{font-size:11px;color:var(--dim);cursor:pointer;text-decoration:underline}
+#tutcard .tx{font-size:13px;line-height:1.6}
+#tutcard .row{display:flex;justify-content:flex-end;margin-top:8px}
+.tut-glow{outline:2px solid var(--hazard) !important;outline-offset:2px;position:relative}
+@media(prefers-reduced-motion:no-preference){
+  .tut-glow{animation:tutpulse 1.2s ease-in-out infinite alternate}
+  @keyframes tutpulse{from{outline-color:var(--hazard)}to{outline-color:#8a6532}}}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1B222D;
   border:1px solid var(--hazard);color:var(--bone);padding:8px 14px;border-radius:4px;
   font-family:var(--mono);font-size:12px;z-index:120;opacity:0;transition:opacity .25s;max-width:92vw}
@@ -132,13 +147,15 @@ canvas{display:block;margin:0 auto;width:100%;max-width:624px;height:auto;
     <div class="setup">
       <label><span class="lbl">Difficulty</span>
         <select id="selDiff">
-          <option value="standard">Standard — the report is correct</option>
+          <option value="trainee">Trainee — annotated training file</option>
+          <option value="standard" selected>Standard — the report is correct</option>
           <option value="veteran">Veteran — 15% misidentified</option>
           <option value="nightmare">Nightmare — 35% misID, perma-death</option>
           <option value="blackout">Blackout — no ID given</option>
         </select></label>
       <label><span class="lbl">Contract seed</span><input id="selSeed" type="number" value="7" style="width:90px"></label>
       <button class="primary" id="btnNew">File contract</button>
+      <button id="btnTut">First shift? Run the training contract</button>
     </div>
     <div class="form" id="formText"></div>
     <div class="setup"><button class="primary" id="btnDeploy">Deploy the Bravo shift</button></div>
@@ -182,6 +199,9 @@ canvas{display:block;margin:0 auto;width:100%;max-width:624px;height:auto;
   </div>
 </div>
 <div id="modal"><div class="box"><h2 id="mTitle"></h2><div class="body" id="mBody"></div><div class="row" id="mRow"></div></div></div>
+<div id="tutcard"><div class="hd"><span class="step" id="tutStep"></span>
+  <span class="skip" id="tutSkip">skip training</span></div>
+  <div class="tx" id="tutText"></div><div class="row" id="tutRow"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -402,7 +422,8 @@ grave_soil:"Grave Soil",votive:"Votive Candles",cleansing_bundle:"Cleansing Bund
 name_fragment:"Name-Fragment",lantern:"Lantern",iron_filings:"Iron Filings",woven_effigy:"Woven Effigy"};
 const CRATE=["ritual_chalk","consecrated_water","censer_incense","mirror_ward","salt","salt",
 "cleansing_bundle","cleansing_bundle","votive","votive","lantern"];
-const DIFF={standard:{misid:0,mult:1,perma:false,blackout:false},
+const DIFF={trainee:{misid:0,mult:.5,perma:false,blackout:false,trainee:true},
+standard:{misid:0,mult:1,perma:false,blackout:false},
 veteran:{misid:.15,mult:1.5,perma:false,blackout:false},
 nightmare:{misid:.35,mult:2.25,perma:true,blackout:false},
 blackout:{misid:0,mult:3,perma:true,blackout:true}};
@@ -518,6 +539,16 @@ class Contract{
       L.push("Dispatch memo: crew of 3 deployed / 2 returned. One member still on site.");
       for(const[t]of rng.sample(LOGLINES[this.trueGhost],2))L.push('  fragment: "'+t+'"');
       L.push("File the ID before Enact — there is no claim to trust.");return L}
+    if(cfg.trainee){
+      L.push("H&V FORM 11-R — TRAINING FILE — Claimed Entity: "+
+        GHOSTS[this.claimed].name.toUpperCase());
+      L.push("Confidence: Certified (Farrow oversight). This report is correct.");
+      for(const[t,a]of LOGLINES[this.trueGhost].slice(0,3)){L.push("  log: "+t);
+        if(a)L.push("    [margin, Farrow: that behavior is a Tell — verify it "+
+          "on site and the Journal narrows]")}
+      L.push("Downed Manifest: 1 Alpha member on site, last seen near the "+
+        (site.room(this.alphaPos)||"site")+".");
+      return L}
     L.push("H&V FORM 11-R — Claimed Entity: "+GHOSTS[this.claimed].name.toUpperCase());
     L.push("Confidence: "+(this.misid?rng.choice(["High","High","Moderate"]):"High")+".");
     const pool=LOGLINES[this.trueGhost].filter(([,a])=>a==null||GHOSTS[this.claimed].possible.includes(a));
@@ -1175,26 +1206,62 @@ if(typeof document!=="undefined"){(function(){
 const $=(q)=>document.querySelector(q);
 const TS=26;let sim=null,sel=null,sprint=false,rings=[];
 const cv=$("#cv"),ctx=cv.getContext("2d");
+const REDUCED=matchMedia("(prefers-reduced-motion: reduce)").matches;
+let tut=null,tutMarker=null;
+// ---- smooth movement: tweens over tile-space waypoints ----
+const anim={};   // name -> {x,y} float tile coords
+let tweens=[];   // {name, pts:[[x,y],...], t0, dur}
+let ticking=false;
+function animPos(name,fallback){if(!anim[name])anim[name]={x:fallback[0],y:fallback[1]};
+  return anim[name]}
+function startWalk(name,pts,perTile=75){if(REDUCED||pts.length<2){
+    anim[name]={x:pts[pts.length-1][0],y:pts[pts.length-1][1]};draw();return}
+  tweens=tweens.filter(t=>t.name!==name);
+  tweens.push({name,pts,t0:performance.now(),dur:(pts.length-1)*perTile});
+  tick()}
+function syncAnim(){for(const s of sim.squad){
+    const a=animPos(s.name,s.pos);
+    if(!tweens.some(t=>t.name===s.name)&&(a.x!==s.pos[0]||a.y!==s.pos[1]))
+      startWalk(s.name,[[a.x,a.y],s.pos],110)}
+  const g=animPos("ghost",sim.gpos);
+  if(!tweens.some(t=>t.name==="ghost")&&(g.x!==sim.gpos[0]||g.y!==sim.gpos[1]))
+    startWalk("ghost",[[g.x,g.y],sim.gpos],55)}
+function tick(){if(ticking)return;ticking=true;
+  const step=()=>{const now=performance.now();
+    for(const t of tweens){const p=Math.min(1,(now-t.t0)/t.dur);
+      const seg=p*(t.pts.length-1),i=Math.min(t.pts.length-2,Math.floor(seg)),f=seg-i;
+      anim[t.name]={x:t.pts[i][0]+(t.pts[i+1][0]-t.pts[i][0])*f,
+                    y:t.pts[i][1]+(t.pts[i+1][1]-t.pts[i][1])*f}}
+    tweens=tweens.filter(t=>now-t.t0<t.dur);
+    draw();
+    if(tweens.length||rings.length)requestAnimationFrame(step);
+    else ticking=false};
+  requestAnimationFrame(step)}
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("on");
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),2200)}
 // briefing ------------------------------------------------------------
-function newContract(){const seed=parseInt($("#selSeed").value||"7",10);
-  sim=new Sim(seed,$("#selDiff").value);
-  sel=null;sprint=false;rings=[];
+function newContract(forceGhost){const seed=parseInt($("#selSeed").value||"7",10);
+  sim=new Sim(seed,$("#selDiff").value,null,forceGhost||null);
+  sel=null;sprint=false;rings=[];tweens=[];
+  for(const k of Object.keys(anim))delete anim[k];
   $("#formText").textContent="CONTRACT — Medium farmhouse · "+
     $("#selDiff").value.toUpperCase()+"\n\n"+sim.contract.report.join("\n")+
     "\n\nSquad: VANCE (Ritualist) · OKAFOR (Warden) · LIS (Scout)";}
-$("#btnNew").onclick=newContract;
-$("#btnDeploy").onclick=()=>{if(!sim)newContract();
+$("#btnNew").onclick=()=>newContract();
+function deploy(){if(!sim)newContract();
   sim.startPlayerPhase();
   $("#briefing").classList.remove("on");$("#play").classList.add("on");
   renderAll();
-  logFlush()};
+  logFlush()}
+$("#btnDeploy").onclick=deploy;
 // tabs ----------------------------------------------------------------
+let lastTab="log";
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id===b.dataset.t));
-  if(b.dataset.t==="journal")renderJournal()});
+  lastTab=b.dataset.t;
+  if(b.dataset.t==="journal")renderJournal();
+  tutCheck()});
 // log -----------------------------------------------------------------
 let logShown=0;
 function logFlush(){const el=$("#log");
@@ -1304,11 +1371,12 @@ function draw(){const site=sim.site;
     ctx.lineTo(p[0]*TS+TS-7,p[1]*TS+7);ctx.stroke();ctx.lineWidth=1}
   // ghost (visible while hunting & in LOS, or hosted alpha)
   const gvis=sim.hunt&&sim.squad.some(s=>s.mobile()&&!s.hidden&&site.los(s.pos,sim.gpos));
-  if(gvis||sim.hosted){const p=sim.gpos;
+  if(gvis||sim.hosted){const gp=animPos("ghost",sim.gpos);
+    const gx=gp.x*TS+TS/2,gy=gp.y*TS+TS/2;
     ctx.fillStyle=sim.hosted?"rgba(160,120,220,.85)":"rgba(127,214,180,.8)";
-    ctx.beginPath();ctx.arc(p[0]*TS+TS/2,p[1]*TS+TS/2,9,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(gx,gy,9,0,7);ctx.fill();
     ctx.fillStyle="#0C0F14";ctx.font="bold 11px sans-serif";ctx.textAlign="center";
-    ctx.fillText(sim.hosted?"Ω":"G",p[0]*TS+TS/2,p[1]*TS+TS/2+4);ctx.textAlign="left"}
+    ctx.fillText(sim.hosted?"Ω":"G",gx,gy+4);ctx.textAlign="left"}
   // move range
   if(sel&&sel.mobile()&&!sel.hidden&&sel.ap>0){
     const limit=sprint?7:(sel.carrying?3:(sel.cls==="Scout"?5:4));
@@ -1320,9 +1388,13 @@ function draw(){const site=sim.site;
       if(path&&path.length>0&&path.length<=limit){
         ctx.fillStyle=sprint?"rgba(200,86,76,.13)":"rgba(223,164,87,.11)";
         ctx.fillRect(x*TS+1,y*TS+1,TS-2,TS-2)}}}
+  // tutorial tile marker
+  if(tutMarker){const[mx,my]=tutMarker;
+    ctx.strokeStyle="#DFA457";ctx.lineWidth=2;
+    ctx.strokeRect(mx*TS+2,my*TS+2,TS-4,TS-4);ctx.lineWidth=1}
   // specialists
-  for(const s of sim.squad){const p=s.pos;
-    const cx=p[0]*TS+TS/2,cy=p[1]*TS+TS/2;
+  for(const s of sim.squad){const p=animPos(s.name,s.pos);
+    const cx=p.x*TS+TS/2,cy=p.y*TS+TS/2;
     ctx.globalAlpha=s.hidden?0.45:1;
     ctx.fillStyle=s.downed||s.dead?"#4A3F3D":
       (s.cls==="Ritualist"?"#DFA457":s.cls==="Warden"?"#8A9BB0":"#7FD6B4");
@@ -1341,7 +1413,7 @@ function draw(){const site=sim.site;
     ctx.lineWidth=r.kind==="banish"?3:1.5;
     ctx.beginPath();ctx.arc(r.pos[0]*TS+TS/2,r.pos[1]*TS+TS/2,4+age*TS*1.4,0,7);
     ctx.stroke();ctx.lineWidth=1}
-  if(rings.length)requestAnimationFrame(draw)}
+  if(rings.length&&!ticking)tick()}
 function mark(p,t,col){ctx.fillStyle=col;ctx.font="bold 11px sans-serif";ctx.textAlign="center";
   ctx.fillText(t,p[0]*TS+TS/2,p[1]*TS+TS/2+4);ctx.textAlign="left"}
 // input ---------------------------------------------------------------
@@ -1371,7 +1443,14 @@ function tapTile(p){const site=sim.site;
       act(sim.actInteract(sel,"inspect",p));return}
     const dsp=sim.squad.find(s=>s.downed&&!s.dead&&key(s.pos)===k);
     if(dsp){act(sim.actLift(sel));return}}
-  if(site.walkable(p))act(sim.actMove(sel,p,sprint));
+  if(site.walkable(p)){
+    const blocked=sim.squad.filter(o=>o!==sel&&o.mobile()).map(o=>o.pos);
+    const plan=site.path(sel.pos,p,{blocked});
+    const from=sel.pos.slice();
+    const res=sim.actMove(sel,p,sprint);
+    if(res[0]&&plan){anim[sel.name]={x:from[0],y:from[1]};
+      startWalk(sel.name,[from,...plan],sprint?55:75)}
+    act(res)}
   else toast("blocked")}
 function act([ok,msg]){toast(msg);if(ok)sprint=false;renderAll();logFlush()}
 // action bar ----------------------------------------------------------
@@ -1401,7 +1480,7 @@ function renderActs(){const el=$("#acts");el.innerHTML="";
     const[ready]=sim.riteReady();
     mk2("Channel",()=>act(sim.actChannel(sel)),{dis:!ready||sel.ap<2,cls:"on"});
   }
-  mk2("End turn",endTurn,{cls:"primary"})}
+  const be=mk2("End turn",endTurn,{cls:"primary"});be.id="btnEnd"}
 function endTurn(){if(!sim||sim.over)return;
   sel=null;sprint=false;
   sim.advance();
@@ -1449,7 +1528,7 @@ function renderRail(){$("#round").textContent=sim.round;
 function renderReport(){$("#report").textContent=sim.contract.report.join("\n")}
 function renderAll(){renderRail();renderChips();renderActs();renderReport();
   if($("#journal").classList.contains("on"))renderJournal();
-  draw()}
+  syncAnim();tutCheck();draw()}
 // debrief -------------------------------------------------------------
 function showDebrief(){const[total,lines]=sim.debrief();
   let body="OUTCOME: "+String(sim.outcome).toUpperCase()+"\n\n"+lines.join("\n")+
@@ -1460,6 +1539,82 @@ function showDebrief(){const[total,lines]=sim.debrief();
   modal("H&V Debrief — Form 9-D",body,[["New contract",()=>{closeModal();
     $("#play").classList.remove("on");$("#briefing").classList.add("on");
     $("#log").innerHTML="";logShown=0;newContract()},"primary"]])}
+// tutorial ------------------------------------------------------------
+const TUTS=[
+ {text:"Welcome to the Bravo Shift, Supervisor. Alpha identified the entity and "+
+   "drove away; your crew goes back in. One contract: confirm the entity from its "+
+   "behavior, perform its Banishment Rite, and walk everyone out — with the Alpha "+
+   "member they left behind.",next:true},
+ {text:"Start with the paperwork. Open the DOSSIER tab and read Form 11-R — on a "+
+   "training file Farrow's margin notes explain what each logged behavior rules out.",
+   sel:'[data-t="report"]',done:()=>lastTab==="report"},
+ {text:"Tap LIS's card (or her token). She's your Scout — fastest mover, and she "+
+   "passively reads any ghost event within 8 tiles.",sel:"#chips",
+   done:()=>sel&&sel.name==="Lis"},
+ {text:"Amber tiles are in reach (Move = 1 AP, up to 5 for a Scout). Tap one to "+
+   "walk there — tap an adjacent door to open it for free.",
+   done:()=>sim.squad.some(s=>sim.site.room(s.pos)!=="Van")},
+ {text:"Sweep toward the CELLAR, down the hall on the left. The Anchor — the "+
+   "object tethering the ghost — announces its room with a hum when you enter.",
+   tile:[5,6],done:()=>sim.anchorFound},
+ {text:"The hum says the Anchor is in this room. Stand next to the ? markers and "+
+   "tap them to Inspect (1 AP) until you confirm the tether.",
+   done:()=>sim.anchorConfirmed},
+ {text:"Open the JOURNAL. Every observed behavior lands here as a Tell; two "+
+   "sightings Confirm it, and the candidate grid dims every ghost the evidence "+
+   "rules out. (Panicking specialists can log FALSE Tells — tap an entry to "+
+   "strike testimony you don't trust.)",sel:'[data-t="journal"]',
+   done:()=>lastTab==="journal"},
+ {text:"END THE TURN. The ghost acts in its own phase — you only see what your "+
+   "people see or hear (rings). The Dread gauge climbs every round; from 60 it "+
+   "shows live Hunt odds. Dread is your clock.",sel:"#btnEnd",
+   done:()=>sim.round>=2},
+ {text:"The Hantu's Warming Rite needs heat: reach the furnace F in the mudroom "+
+   "and tap it to light it. The site — and the Anchor room — will warm over the "+
+   "next rounds.",tile:[15,3],done:()=>sim.site.furnaceOn},
+ {text:"Now stage the Rite: carry Brazier Coals ×2 and Lamp Oil to the Anchor A "+
+   "and use PLACE while standing next to it. (Check the squad cards to see who "+
+   "carries what.)",done:()=>sim.riteReady()[0]},
+ {text:"Everything is staged. Put VANCE (Ritualist — he enacts faster) within one "+
+   "tile of A and CHANNEL: it takes his whole turn, and the progress banks next "+
+   "round if the chant holds through the ghost's phase.",
+   done:()=>sim.banked>=1},
+ {text:"Hold the chant. If the gauge flashes PRELUDE, a Hunt follows one round "+
+   "later — hide, break line of sight… or finish the rite: a completed banishment "+
+   "ends any Hunt instantly. Fair scary: every death traces to a decision.",
+   next:true},
+ {text:"After the banishment: tap the red ✕ to TAG the Alpha, tap again to lift, "+
+   "carry them to the van, and walk the whole squad out. H&V pays on delivery.",
+   done:()=>sim.over},
+ {text:"Training complete. Take a Standard contract next — and when you're ready, "+
+   "Veteran: there the report can be wrong, and the real game begins. Trust the "+
+   "site, not the paper.",next:true},
+];
+function tutStart(){$("#selDiff").value="trainee";$("#selSeed").value=3;
+  newContract("hantu");deploy();
+  tut={i:0};tutShow()}
+function tutShow(){const t=TUTS[tut.i];if(!t){tutEnd();return}
+  $("#tutcard").classList.add("on");
+  $("#tutStep").textContent="Training "+(tut.i+1)+" / "+TUTS.length;
+  $("#tutText").textContent=t.text;
+  document.querySelectorAll(".tut-glow").forEach(e=>e.classList.remove("tut-glow"));
+  tutMarker=t.tile||null;
+  if(t.sel){const el=document.querySelector(t.sel);if(el)el.classList.add("tut-glow")}
+  const row=$("#tutRow");row.innerHTML="";
+  if(t.next||!t.done){const b=document.createElement("button");
+    b.className="primary";b.textContent=tut.i===TUTS.length-1?"Finish":"Got it";
+    b.onclick=()=>{tut.i++;tutShow()};row.appendChild(b)}
+  draw()}
+function tutCheck(){if(!tut||!sim)return;
+  const t=TUTS[tut.i];if(!t)return;
+  if(sim.over&&tut.i<TUTS.length-1){tut.i=TUTS.length-1;tutShow();return}
+  if(t.done&&t.done()){tut.i++;tutShow()}}
+function tutEnd(){tut=null;tutMarker=null;
+  $("#tutcard").classList.remove("on");
+  document.querySelectorAll(".tut-glow").forEach(e=>e.classList.remove("tut-glow"));
+  draw()}
+$("#tutSkip").onclick=tutEnd;
+$("#btnTut").onclick=tutStart;
 newContract();
 })()}
 </script>
