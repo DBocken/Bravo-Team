@@ -27,6 +27,9 @@ def main():
     ap.add_argument("--stats", type=int, metavar="N",
                     help="Monte Carlo: run N seeds per difficulty, print a "
                          "balance table (09-tech-architecture.md, in miniature)")
+    ap.add_argument("--byghost", type=int, metavar="N",
+                    help="Monte Carlo: N seeds per ghost on standard and on "
+                         "forced-misID veteran; per-ghost balance table")
     args = ap.parse_args()
 
     if args.selftest:
@@ -35,6 +38,10 @@ def main():
 
     if args.stats:
         run_stats(args.stats)
+        return
+
+    if args.byghost:
+        run_byghost(args.byghost)
         return
 
     sim = Sim(seed=args.seed, difficulty=args.difficulty,
@@ -83,6 +90,35 @@ def run_stats(n):
               f"{misid:>6} {misid_solved:>7}")
     print("\n(misID counts apply to veteran/nightmare rolls; 'solved' = "
           "banished under the corrected ID.)")
+
+
+def run_byghost(n):
+    from . import data
+    from .bot import run_auto
+    print(f"Per-ghost balance — {n} seeds each, standard + forced-misID veteran\n")
+    header = f"{'ghost':<12} {'std banish':>10} {'std rds':>8} " \
+             f"{'misID banish':>13} {'misID rds':>10} {'re-ID ok':>9}"
+    print(header)
+    print("-" * len(header))
+    for ghost in data.GHOST_KEYS:
+        sb, sr, mb, mr, reid = 0, [], 0, [], 0
+        for seed in range(1, n + 1):
+            s = run_auto(Sim(seed=seed, force_ghost=ghost))
+            if s.outcome == "banished":
+                sb += 1
+                sr.append(s.round)
+            v = run_auto(Sim(seed=seed, difficulty="veteran",
+                             force_misid=True, force_ghost=ghost))
+            if v.outcome == "banished":
+                mb += 1
+                mr.append(v.round)
+            if v.journal.working_id == ghost:
+                reid += 1
+        avg = lambda xs: f"{sum(xs) / len(xs):.1f}" if xs else "—"
+        print(f"{ghost:<12} {sb:>7}/{n:<2} {avg(sr):>8} "
+              f"{mb:>10}/{n:<2} {avg(mr):>10} {reid:>6}/{n}")
+    print("\n('re-ID ok' = working ID equals ground truth at contract end, "
+          "banished or not.)")
 
 
 if __name__ == "__main__":

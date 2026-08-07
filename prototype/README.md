@@ -30,7 +30,14 @@ python3 -m bravo_sim --selftest
 
 # Monte Carlo balance farm in miniature (doc 09): N seeds per difficulty
 python3 -m bravo_sim --stats 20
+python3 -m bravo_sim --byghost 6     # per-ghost table, incl. forced misID
 ```
+
+**Playable in a browser:** [`web/field-console.html`](web/field-console.html)
+is a self-contained JS port of this sim (all 12 ghosts, all four
+difficulties, touch-first UI) — open the file locally, no build step, no
+dependencies. **Balance findings** from the Monte Carlo runs, with proposals
+back into the design docs, live in [`FINDINGS.md`](FINDINGS.md).
 
 Same seed + same flags ⇒ byte-identical transcript (a selftest asserts it).
 

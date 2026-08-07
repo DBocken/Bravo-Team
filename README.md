@@ -71,6 +71,11 @@ python3 -m bravo_sim --play                                        # play
 python3 -m bravo_sim --selftest                                    # verify
 ```
 
+Prefer a browser? [`prototype/web/field-console.html`](prototype/web/field-console.html)
+is a self-contained playable port — open it locally, nothing to install.
+Balance findings from the prototype's Monte Carlo runs are collected in
+[`prototype/FINDINGS.md`](prototype/FINDINGS.md).
+
 ## Status
 
 **Concept / pre-production.** This repository contains the design package
