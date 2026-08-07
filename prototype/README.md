@@ -34,9 +34,11 @@ python3 -m bravo_sim --byghost 6     # per-ghost table, incl. forced misID
 ```
 
 **Playable in a browser:** [`web/field-console.html`](web/field-console.html)
-is a self-contained JS port of this sim (all 12 ghosts, all four
-difficulties, touch-first UI) — open the file locally, no build step, no
-dependencies. **Balance findings** from the Monte Carlo runs, with proposals
+is a self-contained JS port of this sim (all 12 ghosts, Trainee tutorial,
+all difficulties, touch-first UI) rendered as a real-time **WebGL haunted
+diorama** — procedurally generated geometry, textures and per-room dynamic
+lighting, no asset files. three.js r147 (MIT) is inlined so the single file
+runs offline with no build step. **Balance findings** from the Monte Carlo runs, with proposals
 back into the design docs, live in [`FINDINGS.md`](FINDINGS.md).
 
 Same seed + same flags ⇒ byte-identical transcript (a selftest asserts it).
