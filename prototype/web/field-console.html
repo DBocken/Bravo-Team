@@ -136,10 +136,11 @@ body.locked{overflow:hidden}
   line-height:1.7;overflow-y:auto;flex:1}
 .pane.on{display:block}
 /* ambient log ticker over the world */
-#ticker{position:absolute;left:164px;bottom:52px;right:56px;z-index:22;
+#ticker{position:absolute;left:164px;right:56px;z-index:22;
+  bottom:calc(var(--actsH,46px) + 14px);
   font-family:var(--mono);font-size:11.5px;line-height:1.55;pointer-events:none;
   display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-@media(max-width:620px){#ticker{left:128px;bottom:104px;font-size:11px}}
+@media(max-width:620px){#ticker{left:128px;font-size:11px}}
 #ticker div{background:rgba(8,11,16,.72);padding:2px 8px;border-radius:3px;
   max-width:100%;transition:opacity .8s;color:var(--bone)}
 #ticker .ev{color:var(--ecto)}#ticker .al{color:var(--blood)}#ticker .ok{color:var(--hazard)}
@@ -284,8 +285,16 @@ body.tut #ticker{display:none}
       the prints identify it.<br>
       <b>Amber dots</b> — dropped items, tap adjacent to recover. Amber
       squares on furniture — searchable.<br>
-      <b>Red body</b> — the downed Alpha. Walk next to them, tap to shoulder
-      them, carry them to the van. No paperwork — you are the extraction.<br>
+      <b>Figure in a red helmet</b> — the downed Alpha, lying where they
+      fell. Walk next to them, tap to shoulder them, carry them to the van.
+      No paperwork — you are the extraction.<br>
+      <br><b style="color:var(--hazard)">WHAT YOU CAN SEE</b><br>
+      The site is dark. You see what your crew's <b>headlamps</b> reach —
+      a cone in the direction each specialist last moved, blocked by walls —
+      and <b>any room whose light is on</b>. Switching a room light on
+      reveals it wholly, but costs Dread and tells the entity where you are.
+      Rooms you have already been through stay dimly remembered; anything
+      moving in them does not.<br>
       <br><b style="color:var(--hazard)">CONTROLS</b><br>
       Tap a card or token to select · tap a glowing tile to move · tap
       adjacent doors and objects to use them · drag to pan · pinch or wheel
@@ -1606,11 +1615,13 @@ function init3D(){
   R={renderer,scene,camera,staticG,dynG,unitG,fxG,lightG,huntLight,ghostLight,
     doors:{},roomFloors:{},roomLights:{},units:{},ghostM:null,alphaM:null,
     W,H,cam:(()=>{const f=Math.min(8.6,Math.max(4.6,6.4*(W/H)));return{cx:12,cz:10,half:f,tx:12,tz:10,th:f}})()};
+  R.seen=null;R.vis=null;
   R.px=Math.min(devicePixelRatio||1,2);
   R.q=2;R.fr=0;R.fsum=0;R.flast=0;   // adaptive quality state
   R.post=buildPost(W,H);
   buildStatic();
   buildUnits();
+  R.fog=buildFog();scene.add(R.fog.mesh);
   bindInput(renderer.domElement);
   if(!R.loop){R.loop=true;requestAnimationFrame(frame)}}
 function camFollow(p,zoom){if(!R)return;
@@ -1636,7 +1647,11 @@ function box(w,h,d,color,map,opts={}){
 function buildStatic(){
   const site=sim.site,G=R.staticG;
   while(G.children.length)G.remove(G.children[0]);
-  R.doors={};R.roomFloors={};
+  R.doors={};R.roomFloors={};R.tileObjs={};
+  const reg=(m,x,y)=>{const k=x+","+y;
+    (R.tileObjs[k]=R.tileObjs[k]||[]).push(m);
+    if(m.material&&m.material.color)m.userData.base=m.material.color.clone();
+    return m};
   // outside ground
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(90,70),
     new THREE.MeshLambertMaterial({map:grassTex(),color:0x39424b}));
@@ -1678,18 +1693,23 @@ function buildStatic(){
       if(!horizontal)hinge.position.x-=0.44;
       grp.add(hinge);G.add(grp);
       R.doors[k]={hinge,horizontal,open:0}}
-    else if(kind==="wall"){const m=box(1,0.92,1,0x8F8A80,wallTex());
-      m.position.set(x+0.5,0.46,y+0.5);G.add(m)}
+    else if(kind==="wall"){const m=box(1,0.92,1,0x8F8A80,wallTex(),
+        {transparent:true,opacity:0.5,depthWrite:false});
+      m.position.set(x+0.5,0.46,y+0.5);G.add(m);reg(m,x,y)}
     else if(kind==="window"){
-      const b=box(1,0.42,1,0x8F8A80,wallTex());b.position.set(x+0.5,0.21,y+0.5);
-      const t=box(1,0.16,1,0x8F8A80,wallTex());t.position.set(x+0.5,0.84,y+0.5);
+      const b=box(1,0.42,1,0x8F8A80,wallTex(),
+        {transparent:true,opacity:0.55,depthWrite:false});
+      b.position.set(x+0.5,0.21,y+0.5);
+      const t=box(1,0.16,1,0x8F8A80,wallTex(),
+        {transparent:true,opacity:0.55,depthWrite:false});
+      t.position.set(x+0.5,0.84,y+0.5);
       const glass=box(1,0.34,1,0x9FCADB,null,
         {transparent:true,opacity:0.22,emissive:0x224455});
       glass.castShadow=false;glass.position.set(x+0.5,0.59,y+0.5);
-      G.add(b,t,glass)}
+      G.add(b,t,glass);reg(b,x,y);reg(t,x,y);reg(glass,x,y)}
     else if(kind==="van"){/* below */}
     const furn=site.furn[k];
-    if(furn)addProp(G,site.room([x,y]),furn,x,y)}
+    if(furn)addProp(G,site.room([x,y]),furn,x,y,reg)}
   // van body
   const van=box(4.4,1.05,1.15,0x4A5A6C);van.position.set(12,0.53,14.45);
   G.add(van);
@@ -1742,11 +1762,11 @@ function buildStatic(){
         new THREE.MeshLambertMaterial({color:0x5d5346}));
         c.castShadow=true;return c})();
     m.position.set(x+0.18+rr.random()*0.64,s/2,y+0.18+rr.random()*0.64);
-    m.rotation.y=rr.random()*3.1;G.add(m)}}
-function addProp(G,room,kind,x,y){
+    m.rotation.y=rr.random()*3.1;G.add(m);reg(m,x,y)}}
+function addProp(G,room,kind,x,y,reg){
   const g=new THREE.Group();g.position.set(x+0.5,0,y+0.5);
   const B=(w,h,d,c,ox=0,oy=0,oz=0)=>{const m=box(w,h,d,c);
-    m.position.set(ox,oy+h/2,oz);g.add(m);return m};
+    m.position.set(ox,oy+h/2,oz);g.add(m);if(reg)reg(m,x,y);return m};
   if(kind==="hide"){
     if(room==="Bedroom"){B(0.95,0.32,0.72,0x6E5A41);
       B(0.86,0.15,0.62,0xB8AF9A,0,0.32);B(0.3,0.1,0.5,0xD8D3C4,-0.24,0.47);
@@ -1777,38 +1797,90 @@ function addProp(G,room,kind,x,y){
       B(0.5,0.12,0.36,0x54493B,0,0.36)}          // stacked crates
     else B(0.8,0.4,0.55,0x7A664B)}
   G.add(g)}
+// One figure recipe for everyone on site — Bravo crew and Alpha casualties
+// alike read as people in overalls, never as markers.
+function makeWorker(overall,hat,withLamp){
+  const grp=new THREE.Group();
+  const inner=new THREE.Group();grp.add(inner);
+  const mats=[];
+  const M=(c,e)=>{const m=new THREE.MeshStandardMaterial(
+    {color:c,transparent:true,roughness:0.72,metalness:0.05,
+     emissive:e||0x000000,emissiveIntensity:e?1.4:0});
+    mats.push(m);return m};
+  const legs=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.22),M(0x3A3F46));
+  legs.position.y=0.1;legs.castShadow=true;inner.add(legs);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.36,0.28),M(overall));
+  body.position.y=0.38;body.castShadow=true;inner.add(body);
+  const strap=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.07,0.3),M(0x2E333B));
+  strap.position.y=0.31;inner.add(strap);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),M(0xC9A98F));
+  head.position.y=0.66;head.castShadow=true;inner.add(head);
+  const hatM=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.09,12),M(hat));
+  hatM.position.y=0.77;inner.add(hatM);
+  const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.02,12),M(hat));
+  brim.position.y=0.735;inner.add(brim);
+  const lampDot=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,6),
+    M(withLamp?0xFFF2C8:0x6A6256,withLamp?0xFFE7A0:0));
+  lampDot.position.set(0,0.76,0.16);inner.add(lampDot);
+  let lamp=null;
+  if(withLamp){lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
+    lamp.position.set(0,0.78,0.1);
+    const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
+    inner.add(lt);lamp.target=lt;inner.add(lamp)}
+  return {grp,inner,mats,lamp}}
+// The night only gives up what a headlamp finds — or what you switch on.
+function buildFog(){
+  const W=24,H=15,data=new Uint8Array(W*H*4);
+  for(let i=0;i<W*H;i++){data[i*4]=6;data[i*4+1]=9;data[i*4+2]=16;
+    data[i*4+3]=236}
+  const tex=new THREE.DataTexture(data,W,H,THREE.RGBAFormat);
+  tex.minFilter=tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H),
+    new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,
+      fog:false}));
+  mesh.rotation.x=-Math.PI/2;mesh.position.set(W/2,0.045,H/2);
+  mesh.renderOrder=6;
+  return {mesh,tex,data}}
+function computeVision(){
+  const site=sim.site,W=24,H=15;
+  const vis=R.vis||(R.vis=new Float32Array(W*H));
+  vis.fill(0);
+  if(!R.seen)R.seen=new Uint8Array(W*H);
+  const setv=(x,y,v)=>{if(x<0||y<0||x>=W||y>=H)return;
+    const i=y*W+x;if(v>vis[i])vis[i]=v};
+  // a room with its light on is simply visible — that is the trade
+  for(const k in site.roomOf){const p=k.split(",").map(Number);
+    const lv=site.lightLevel(p,sim.round);
+    if(lv==="lit")setv(p[0],p[1],1);else if(lv==="dim")setv(p[0],p[1],0.78)}
+  for(const p of site.roomTiles("Van"))setv(p[0],p[1],1);
+  for(const s of sim.squad){
+    if(!s.mobile())continue;
+    const u=R.units[s.name],dir=u?u.dir:Math.PI;
+    const fx=Math.sin(dir),fz=Math.cos(dir),cx=s.pos[0],cy=s.pos[1];
+    for(let y=Math.max(0,cy-7);y<=Math.min(H-1,cy+7);y++)
+      for(let x=Math.max(0,cx-7);x<=Math.min(W-1,cx+7);x++){
+        const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy);
+        if(d>7.2)continue;
+        if(!site.los([cx,cy],[x,y]))continue;
+        if(d<1.7){setv(x,y,1);continue}          // you feel your own footing
+        const dot=(dx/d)*fx+(dy/d)*fz;
+        if(dot<0.42)continue;                     // the cone, ~65 deg
+        setv(x,y,Math.min(1,0.6+dot*0.45))}}
+  for(let i=0;i<vis.length;i++)if(vis[i]>0.25)R.seen[i]=1;
+  return vis}
+function updateFog(vis){const {data,tex}=R.fog,W=24,H=15;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x;
+    const v=vis[i]>0?vis[i]:(R.seen[i]?0.30:0);
+    data[((H-1-y)*W+x)*4+3]=Math.round((1-Math.max(0,Math.min(1,v)))*236)}
+  tex.needsUpdate=true}
+function seenAt(p){return R.seen&&R.seen[p[1]*24+p[0]]}
 function buildUnits(){const G=R.unitG;
   while(G.children.length)G.remove(G.children[0]);
   R.units={};
-  for(const s of sim.squad){const grp=new THREE.Group();
-    const inner=new THREE.Group();grp.add(inner);   // rotates to face movement
-    const mats=[];
-    const M=(c,e)=>{const m=new THREE.MeshStandardMaterial(
-      {color:c,transparent:true,roughness:0.72,metalness:0.05,
-       emissive:e||0x000000,emissiveIntensity:e?1.4:0});
-      mats.push(m);return m};
-    const legs=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.22),M(0x3A3F46));
-    legs.position.y=0.1;legs.castShadow=true;inner.add(legs);
-    const body=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.36,0.28),
-      M(CLSCOL[s.cls]));
-    body.position.y=0.38;body.castShadow=true;inner.add(body);
-    const strap=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.07,0.3),M(0x2E333B));
-    strap.position.y=0.31;inner.add(strap);
-    const head=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),M(0xC9A98F));
-    head.position.y=0.66;head.castShadow=true;inner.add(head);
-    const hat=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.09,12),
-      M(CLSCOL[s.cls]));
-    hat.position.y=0.77;inner.add(hat);
-    const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.02,12),
-      M(CLSCOL[s.cls]));
-    brim.position.y=0.735;inner.add(brim);
-    const lampDot=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,6),
-      M(0xFFF2C8,0xFFE7A0));
-    lampDot.position.set(0,0.76,0.16);inner.add(lampDot);
-    const lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
-    lamp.position.set(0,0.78,0.1);
-    const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
-    inner.add(lt);lamp.target=lt;inner.add(lamp);
+  for(const s of sim.squad){
+    const w=makeWorker(CLSCOL[s.cls],CLSCOL[s.cls],true);
+    const {grp,inner,mats}=w;
     const ring=new THREE.Mesh(new THREE.RingGeometry(0.3,0.4,24),
       new THREE.MeshBasicMaterial({color:0xF2E9D8,transparent:true,
         opacity:0.9,side:THREE.DoubleSide}));
@@ -1816,12 +1888,12 @@ function buildUnits(){const G=R.unitG;
     grp.add(ring);
     const tag=makeSprite(s.name[0],"#F0E9D8",0.62);tag.position.y=1.22;grp.add(tag);
     const burden=new THREE.Mesh(new THREE.CapsuleGeometry(0.13,0.3,4,8),
-      M(0x9A4B44));
+      new THREE.MeshStandardMaterial({color:0xC9C4B8,roughness:0.8}));
     burden.rotation.z=Math.PI/2.3;burden.position.set(0.05,0.86,-0.14);
     burden.castShadow=true;burden.visible=false;inner.add(burden);
     R.unitG.add(grp);
-    R.units[s.name]={grp,inner,mats,ring,tag,burden,dir:Math.PI,pop:0,
-      px:null,pz:null}}
+    R.units[s.name]={grp,inner,mats,ring,tag,burden,lamp:w.lamp,
+      dir:Math.PI,pop:0,px:null,pz:null}}
   // ghost: identity per 02 §6 — color, bulk, bearing
   const gv=GHOSTVIS[sim.contract.trueGhost]||{c:0x7FD6B4,s:1,tall:false};
   const gg=new THREE.Group();
@@ -1839,11 +1911,11 @@ function buildUnits(){const G=R.unitG;
      blending:THREE.AdditiveBlending}));
     m.scale.set(0.3,0.3,1);gg.add(m);gg.userData.motes.push(m)}
   gg.visible=false;R.unitG.add(gg);R.ghostM=gg;
-  // alpha victim: lying capsule
-  const am=new THREE.Mesh(new THREE.CapsuleGeometry(0.17,0.34,4,8),
-    new THREE.MeshLambertMaterial({color:0x9A4B44}));
-  am.rotation.z=Math.PI/2;am.position.y=0.18;am.castShadow=true;
-  R.unitG.add(am);R.alphaM=am}
+  // Alpha casualty: same figure, other crew's livery, dead headlamp
+  const aw=makeWorker(0xC9C4B8,0xC8564C,false);
+  aw.grp.rotation.x=-Math.PI/2;          // lying on their back
+  aw.grp.position.y=0.17;
+  R.unitG.add(aw.grp);R.alphaM=aw.grp;R.alphaMats=aw.mats;R.alphaInner=aw.inner}
 // dynamic per-state sync (called after actions / ghost phases) -------------
 function lightFactor(name){const lv=sim.site.lightLevel(
   [Math.floor((ROOMS[name][0]+ROOMS[name][2])/2),
@@ -1851,6 +1923,15 @@ function lightFactor(name){const lv=sim.site.lightLevel(
   return lv==="lit"?1.0:(lv==="dim"?0.86:0.72)}
 function sceneSync(){if(!R||!sim)return;
   const site=sim.site;
+  const vis=computeVision();updateFog(vis);
+  // objects: hidden until discovered, dimmed once out of the light again
+  for(const k in R.tileObjs){const p=k.split(",").map(Number);
+    const i=p[1]*24+p[0],now=vis[i]>0.05,ever=!!R.seen[i];
+    for(const m of R.tileObjs[k]){m.visible=ever;
+      if(ever&&m.userData.base&&m.material&&m.material.color)
+        m.material.color.copy(m.userData.base).multiplyScalar(now?1:0.55)}}
+  for(const dk in R.doors){const p=dk.split(",").map(Number);
+    R.doors[dk].hinge.visible=!!R.seen[p[1]*24+p[0]]}
   // room tint + warm room lights
   for(const[name,mesh]of Object.entries(R.roomFloors)){
     const f=name==="Van"?0.8:lightFactor(name);
@@ -1902,12 +1983,14 @@ function sceneSync(){if(!R||!sim)return;
       const p=k.split(",").map(Number);
       if(!site.walkable(p))continue;
       if(sim.squad.some(o=>o!==sel&&o.mobile()&&o.pos[0]===p[0]&&o.pos[1]===p[1]))continue;
+      if(!seenAt(p))continue;
       const path=site.path(sel.pos,p,{blocked});
       if(path&&path.length>0&&path.length<=limit)
         flat(0.92,0.92,sprint?0xC8564C:0xDFA457,0.24,p)}}
   // salt lines
   for(const[k,line]of Object.entries(site.saltLines)){
     const p=k.split(",").map(Number);
+    if(!seenAt(p))continue;
     const m=flat(0.9,0.5,0xffffff,line.state==="intact"?0.9:0.35,p,0.02);
     m.material.map=saltTex(line.state!=="intact");m.material.needsUpdate=true;
     if(line.record){const s=makeSprite("◉","#7FD6B4",0.4);
@@ -1915,6 +1998,7 @@ function sceneSync(){if(!R||!sim)return;
   // floor items
   for(const[k,items]of Object.entries(site.floorItems)){
     if(!items.length)continue;const p=k.split(",").map(Number);
+    if(!seenAt(p))continue;
     const m=new THREE.Mesh(new THREE.OctahedronGeometry(0.12),
       new THREE.MeshLambertMaterial({color:0xDFA457,emissive:0x6a4d1e}));
     m.position.set(p[0]+0.28,0.14,p[1]+0.7);G.add(m)}
@@ -1922,12 +2006,14 @@ function sceneSync(){if(!R||!sim)return;
   const markers=[["F",FURNACE,"#C8564C"],["B",BREAKER,"#DFA457"]];
   for(const[txt,mp,mc]of[["FURNACE",FURNACE,"#C8564C"],
       ["BREAKER",BREAKER,"#DFA457"]]){
+    if(!seenAt(mp))continue;
     const s=makeWord(txt,mc);s.position.set(mp[0]+0.5,0.42,mp[1]+0.5);G.add(s)}
   if(sim.anchorFound&&!sim.anchorConfirmed&&sim.anchorRoom)
     for(const spots of Object.values(ANCHORS))for(const p of spots)
       if(site.room(p)===sim.anchorRoom)markers.push(["?",p,"#7FD6B4"]);
   if(sim.anchorConfirmed)markers.push(["A",sim.contract.anchor,"#7FD6B4"]);
-  for(const[t,p,c]of markers){const s=makeSprite(t,c,0.62);
+  for(const[t,p,c]of markers){if(!seenAt(p))continue;
+    const s=makeSprite(t,c,0.62);
     s.position.set(p[0]+0.5,1.0,p[1]+0.5);s.userData.bob=true;G.add(s)}
   for(const[name,r]of Object.entries(ROOMS)){
     if(name!=="Van"&&(site.temp[name]??13)<=8){
@@ -1953,10 +2039,16 @@ function sceneSync(){if(!R||!sim)return;
     u.ring.visible=sel===s;
     u.burden.visible=!!s.carrying;
     u.tag.material.opacity=s.hidden?0.4:1}
-  // alpha visibility
-  R.alphaM.visible=!sim.alpha.rescued&&sim.alpha.carriedBy==null&&!sim.hosted;
-  if(R.alphaM.visible)R.alphaM.position.set(
-    sim.alpha.pos[0]+0.5,0.18,sim.alpha.pos[1]+0.5)}
+  // Alpha: lying where they fell — or standing, if something wears them
+  const showAlpha=!sim.alpha.rescued&&sim.alpha.carriedBy==null&&
+    (seenAt(sim.alpha.pos)||sim.hosted);
+  R.alphaM.visible=showAlpha;
+  if(showAlpha){
+    R.alphaM.rotation.x=sim.hosted?0:-Math.PI/2;
+    R.alphaM.position.set(sim.alpha.pos[0]+0.5,sim.hosted?0:0.17,
+      sim.alpha.pos[1]+0.5);
+    R.alphaMats.forEach(m=>{m.emissive.setHex(sim.hosted?0x5A2E8A:0x000000);
+      m.emissiveIntensity=sim.hosted?0.9:0})}}
 // per-frame ---------------------------------------------------------------
 let lastT=0;
 function frame(now){requestAnimationFrame(frame);
@@ -2505,7 +2597,7 @@ $("#tutSkip").onclick=tutEnd;
 $("#btnTut").onclick=tutStart;
 addEventListener("resize",()=>{layoutHUD();
   if(R&&sim&&$("#play").classList.contains("on"))resize3D()});
-window._dbg={get sim(){return sim},tap:tapTile,end:endTurn,sel:(n)=>{sel=sim.spec(n);renderAll()}};
+window._dbg={get sim(){return sim},get R(){return R},tap:tapTile,end:endTurn,sel:(n)=>{sel=sim.spec(n);renderAll()}};
 newContract();
 })()}
 
