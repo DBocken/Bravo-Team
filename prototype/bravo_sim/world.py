@@ -24,6 +24,9 @@ FARMHOUSE = [
     "#..t.H.#.......#..T.t..#",
     "#......#.......#H......#",
     "###########+############",
+    "         VVVVVV         ",
+    "         VVVVVV         ",
+    "         VVVVVV         ",
     "          VVVV          ",
 ]
 
@@ -38,7 +41,7 @@ ROOM_RECTS = {
     "Living":   (1, 9, 6, 12),
     "Foyer":    (8, 9, 14, 12),
     "Study":    (16, 9, 22, 12),
-    "Van":      (10, 14, 13, 14),
+    "Van":      (10, 17, 13, 17),
 }
 
 # Start temperatures (deg C). Cold <= 8, warm >= 20 (02-ghost-roster.md, Hantu).

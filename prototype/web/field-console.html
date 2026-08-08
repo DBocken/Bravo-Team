@@ -230,15 +230,18 @@ body.tut #ticker{display:none}
     <div class="form" id="formText"></div>
     <div class="setup"><button class="primary" id="btnDeploy">Deploy the Bravo shift</button></div>
     <div class="help">
-      <b>How a shift runs.</b> Tap a specialist, then a glowing tile to move (2 AP each, move = 1 AP).
-      Tap adjacent things to use them: doors, the furnace <b>F</b> (heats
-      the site), the breaker <b>B</b> (site power), searchable furniture,
-      salt lines, <b>?</b> anchor candidates — and the downed Alpha: walk up
-      and tap them to shoulder them. No tagging, no paperwork — <b>you are
-      the extraction</b>. Confirm the entity from its Tells in the Journal,
-      place the rite reagents at the Anchor <b>A</b>, meet the rite's
-      condition, and Channel until the banishment banks. In-game, the
-      <b>?</b> button opens the full field guide.
+      <b>How a shift runs.</b> Tap a specialist, then a glowing tile to move
+      (2 AP each, move = 1 AP). <b>Tiles only move you</b> — everything you
+      can operate shows up as a button in the action bar the moment you stand
+      beside it: doors, the furnace <b>F</b> (heats the site), the breaker
+      <b>B</b> (site power), searches, the salt line, <b>?</b> anchor
+      candidates, and the downed Alpha (<b>SHOULDER THE ALPHA</b> — no
+      tagging, you are the extraction). Your crew only sees where they are
+      facing: the headlamp beam in the dark, ordinary sight where a room
+      light is on. Confirm the entity from its Tells in the Journal, place
+      the rite reagents at the Anchor <b>A</b>, meet the rite's condition,
+      and Channel until the banishment banks. In-game, the <b>?</b> button
+      opens the full field guide.
     </div>
   </div>
 
@@ -351,10 +354,13 @@ const MAP=[
 "#..t.H.#.......#..T.t..#",
 "#......#.......#H......#",
 "###########+############",
+"         VVVVVV         ",
+"         VVVVVV         ",
+"         VVVVVV         ",
 "          VVVV          "];
 const ROOMS={Kitchen:[1,1,6,3],Pantry:[8,1,11,3],Mudroom:[13,1,18,3],Bedroom:[20,1,22,3],
 Cellar:[1,5,4,7],Hall:[6,5,15,7],Bathroom:[17,5,22,7],Living:[1,9,6,12],Foyer:[8,9,14,12],
-Study:[16,9,22,12],Van:[10,14,13,14]};
+Study:[16,9,22,12],Van:[10,17,13,17]};
 const TEMPS={Kitchen:14,Pantry:12,Mudroom:12,Bedroom:10,Cellar:4,Hall:13,Bathroom:13,Living:15,Foyer:14,Study:13,Van:12};
 const FIXT={Kitchen:true,Pantry:false,Mudroom:false,Bedroom:false,Hall:true,Bathroom:false,Living:false,Foyer:true,Study:false};
 const WINDOWS=[[0,2],[23,2],[23,6],[0,10],[23,10]];
@@ -374,7 +380,7 @@ const cheb=(a,b)=>Math.max(Math.abs(a[0]-b[0]),Math.abs(a[1]-b[1]));
 
 class Site{
   constructor(){
-    this.w=24;this.h=15;this.kind={};this.furn={};this.doorOpen={};this.windowOpen={};
+    this.w=MAP[0].length;this.h=MAP.length;this.kind={};this.furn={};this.doorOpen={};this.windowOpen={};
     WINDOWS.forEach(p=>this.windowOpen[key(p)]=false);
     this.roomOf={};
     MAP.forEach((row,y)=>{for(let x=0;x<row.length;x++){const ch=row[x],k=x+","+y;
@@ -1441,7 +1447,10 @@ function wallTex(){return tex("wall",(g,w,h)=>{
     while(y<h){x+=(Math.random()-0.5)*14;y+=10+Math.random()*14;g.lineTo(x,y)}
     g.stroke()}})}
 function grassTex(){return tex("grass",(g,w,h)=>{
-  g.fillStyle="#20262b";g.fillRect(0,0,w,h);noise(g,w,h,.15,1600)})}
+  g.fillStyle="#1B2126";g.fillRect(0,0,w,h);
+  for(let i=0;i<70;i++){g.fillStyle="rgba(255,255,255,"+(Math.random()*0.03)+")";
+    g.fillRect(Math.random()*w,Math.random()*h,10+Math.random()*26,
+      8+Math.random()*20)}})}
 function saltTex(scoured){return tex(scoured?"salt2":"salt",(g,w,h)=>{
   g.clearRect(0,0,w,h);g.fillStyle=scoured?"rgba(190,185,170,.4)":"#efe9da";
   for(let x=4;x<w;x+=12)g.fillRect(x,h/2-4,scoured?4:8,8)})}
@@ -1508,7 +1517,6 @@ const FRAG_BLUR=`uniform sampler2D tDiffuse;uniform vec2 dir;varying vec2 vUv;
 const FRAG_COMP=`uniform sampler2D tScene,tBloom;
  uniform float uBloom,uTime,uDread,uHunt,uVig,uExposure;varying vec2 vUv;
  vec3 aces(vec3 x){return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0);}
- float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
  void main(){vec2 d=vUv-0.5;
   float ca=0.0022*uHunt;                       // hunts fray the image
   vec3 col;
@@ -1523,7 +1531,6 @@ const FRAG_COMP=`uniform sampler2D tScene,tBloom;
   float v=1.0-uVig*dot(d,d)*1.85;
   col*=clamp(v,0.0,1.0);
   col=aces(col*uExposure);
-  col+=(hash(vUv*vec2(1024.0,768.0)+uTime)-0.5)*0.032;   // film grain
   gl_FragColor=vec4(pow(max(col,0.0),vec3(1.0/2.2)),1.0);}`;
 function makeRT(w,h,depth){return new THREE.WebGLRenderTarget(
   Math.max(2,Math.floor(w)),Math.max(2,Math.floor(h)),
@@ -1614,7 +1621,7 @@ function init3D(){
   scene.add(ghostLight);
   R={renderer,scene,camera,staticG,dynG,unitG,fxG,lightG,huntLight,ghostLight,
     doors:{},roomFloors:{},roomLights:{},units:{},ghostM:null,alphaM:null,
-    W,H,cam:(()=>{const f=Math.min(8.6,Math.max(4.6,6.4*(W/H)));return{cx:12,cz:10,half:f,tx:12,tz:10,th:f}})()};
+    W,H,cam:(()=>{const f=Math.min(8.6,Math.max(4.6,6.4*(W/H)));return{cx:12,cz:12,half:f,tx:12,tz:12,th:f}})()};
   R.seen=null;R.vis=null;
   R.px=Math.min(devicePixelRatio||1,2);
   R.q=2;R.fr=0;R.fsum=0;R.flast=0;   // adaptive quality state
@@ -1626,7 +1633,7 @@ function init3D(){
   if(!R.loop){R.loop=true;requestAnimationFrame(frame)}}
 function camFollow(p,zoom){if(!R)return;
   R.cam.tx=Math.max(4,Math.min(20,p[0]+0.5));
-  R.cam.tz=Math.max(3,Math.min(11,p[1]+0.5));
+  R.cam.tz=Math.max(3,Math.min(15.5,p[1]+0.5));
   if(zoom)R.cam.th=zoom}
 function resize3D(){if(!R)return;const host=$("#gl");
   R.W=host.clientWidth||innerWidth;R.H=host.clientHeight||innerHeight;
@@ -1655,7 +1662,7 @@ function buildStatic(){
   // outside ground
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(90,70),
     new THREE.MeshLambertMaterial({map:grassTex(),color:0x39424b}));
-  TEX.grass.repeat.set(24,18);
+  TEX.grass.repeat.set(7,6);
   ground.rotation.x=-Math.PI/2;ground.position.set(12,-0.02,7.5);
   ground.receiveShadow=true;G.add(ground);
   // room floors (one plane per room, per-room material, tinted by light level)
@@ -1710,11 +1717,34 @@ function buildStatic(){
     else if(kind==="van"){/* below */}
     const furn=site.furn[k];
     if(furn)addProp(G,site.room([x,y]),furn,x,y,reg)}
-  // van body
-  const van=box(4.4,1.05,1.15,0x4A5A6C);van.position.set(12,0.53,14.45);
-  G.add(van);
-  const stripe=box(4.4,0.12,1.17,0xDFA457,null,{emissive:0x6a4d1e});
-  stripe.castShadow=false;stripe.position.set(12,0.62,14.45);G.add(stripe);
+  // the H&V van: cargo body, cab, glass, wheels, rear doors standing open
+  {const V=new THREE.Group();
+   const vr=ROOMS.Van,vz=vr[1]+0.5;
+   V.position.set(vr[0]-2.0,0,vz);    // parked clear of the loading tiles
+   V.rotation.y=Math.PI;              // rear doors face the crew
+   const P=(w,hh,d,c,x,y,z,opts)=>{const m=box(w,hh,d,c,null,opts);
+     m.position.set(x,y,z);V.add(m);return m};
+   P(2.5,1.05,1.7,0x46586B,-0.55,0.72,0);
+   P(2.5,0.1,1.72,0xDFA457,-0.55,1.05,0,{emissive:0x5a3f18});
+   P(1.35,0.78,1.62,0x3E4E60,1.15,0.6,0);
+   P(0.1,0.42,1.5,0x9FCADB,1.83,0.72,0,
+     {transparent:true,opacity:0.35,emissive:0x1b3040});
+   P(1.2,0.34,1.64,0x9FCADB,1.15,0.86,0,
+     {transparent:true,opacity:0.22,emissive:0x16283a});
+   P(0.16,0.16,0.16,0xFFF0C8,1.86,0.42,0.6,{emissive:0xFFE7A0});
+   P(0.16,0.16,0.16,0xFFF0C8,1.86,0.42,-0.6,{emissive:0xFFE7A0});
+   P(0.34,0.1,0.16,0xE0A050,-0.3,1.16,0,{emissive:0x8a5a10});
+   for(const[wx,wz]of[[1.25,0.86],[1.25,-0.86],[-1.2,0.86],[-1.2,-0.86]]){
+     const t=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.2,14),
+       new THREE.MeshStandardMaterial({color:0x1E2228,roughness:0.95}));
+     t.rotation.x=Math.PI/2;t.position.set(wx,0.27,wz);
+     t.castShadow=true;V.add(t)}
+   for(const s of[1,-1]){             // both rear doors standing open
+     const d=box(0.8,0.95,0.07,0x3E4E60);
+     d.position.set(-0.4,0.5,0);
+     const hinge=new THREE.Group();hinge.position.set(-1.82,0,s*0.82);
+     hinge.rotation.y=s*0.22;hinge.add(d);V.add(hinge)}
+   G.add(V)}
   // rugs / doormat / hall runner (flat, walk-through)
   const rug=(w,d,color,x,z,op=0.85)=>{
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
@@ -1733,10 +1763,11 @@ function buildStatic(){
     m.rotation.x=-Math.PI/2;
     m.position.set(wp[0]+dx*1.1+0.5,0.015,wp[1]+0.5);G.add(m)}
   // gravel path from the van to the front door
-  const path=new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.6),
-    new THREE.MeshLambertMaterial({map:floorKind("stone"),color:0x59595c}));
-  path.rotation.x=-Math.PI/2;path.position.set(11.5,-0.005,13.4);
-  path.receiveShadow=true;G.add(path);
+  {const pt=floorKind("stone").clone();pt.needsUpdate=true;pt.repeat.set(6,4);
+   const path=new THREE.Mesh(new THREE.PlaneGeometry(6,4.2),
+     new THREE.MeshStandardMaterial({map:pt,color:0x4E5157,roughness:0.98}));
+   path.rotation.x=-Math.PI/2;path.position.set(12,-0.005,15.6);
+   path.receiveShadow=true;G.add(path)}
   // drifting dust motes
   {const N=110,pos=new Float32Array(N*3);
    for(let i=0;i<N;i++){pos[i*3]=1+Math.random()*22;
@@ -1830,7 +1861,7 @@ function makeWorker(overall,hat,withLamp){
   return {grp,inner,mats,lamp}}
 // The night only gives up what a headlamp finds — or what you switch on.
 function buildFog(){
-  const W=24,H=15,data=new Uint8Array(W*H*4);
+  const W=sim.site.w,H=sim.site.h,data=new Uint8Array(W*H*4);
   for(let i=0;i<W*H;i++){data[i*4]=6;data[i*4+1]=9;data[i*4+2]=16;
     data[i*4+3]=236}
   const tex=new THREE.DataTexture(data,W,H,THREE.RGBAFormat);
@@ -1842,39 +1873,40 @@ function buildFog(){
   mesh.renderOrder=6;
   return {mesh,tex,data}}
 function computeVision(){
-  const site=sim.site,W=24,H=15;
+  const site=sim.site,W=site.w,H=site.h;
   const vis=R.vis||(R.vis=new Float32Array(W*H));
   vis.fill(0);
   if(!R.seen)R.seen=new Uint8Array(W*H);
   const setv=(x,y,v)=>{if(x<0||y<0||x>=W||y>=H)return;
     const i=y*W+x;if(v>vis[i])vis[i]=v};
-  // a room with its light on is simply visible — that is the trade
-  for(const k in site.roomOf){const p=k.split(",").map(Number);
-    const lv=site.lightLevel(p,sim.round);
-    if(lv==="lit")setv(p[0],p[1],1);else if(lv==="dim")setv(p[0],p[1],0.78)}
+  // You see where your people are LOOKING — nothing else. In the dark that
+  // is the headlamp beam; where a room light burns it is ordinary sight.
   for(const p of site.roomTiles("Van"))setv(p[0],p[1],1);
+  const BEAM=7.2,SIGHT=11.5;
   for(const s of sim.squad){
     if(!s.mobile())continue;
     const u=R.units[s.name],dir=u?u.dir:Math.PI;
     const fx=Math.sin(dir),fz=Math.cos(dir),cx=s.pos[0],cy=s.pos[1];
-    for(let y=Math.max(0,cy-7);y<=Math.min(H-1,cy+7);y++)
-      for(let x=Math.max(0,cx-7);x<=Math.min(W-1,cx+7);x++){
+    const rad=Math.ceil(SIGHT);
+    for(let y=Math.max(0,cy-rad);y<=Math.min(H-1,cy+rad);y++)
+      for(let x=Math.max(0,cx-rad);x<=Math.min(W-1,cx+rad);x++){
         const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy);
-        if(d>7.2)continue;
+        if(d>SIGHT)continue;
         if(!site.los([cx,cy],[x,y]))continue;
-        if(d<1.7){setv(x,y,1);continue}          // you feel your own footing
+        if(d<1.7){setv(x,y,1);continue}
         const dot=(dx/d)*fx+(dy/d)*fz;
-        if(dot<0.42)continue;                     // the cone, ~65 deg
-        setv(x,y,Math.min(1,0.6+dot*0.45))}}
+        const lit=site.lightLevel([x,y],sim.round);
+        if(lit!=="dark"&&dot>=0.26)setv(x,y,lit==="lit"?1:0.8);
+        if(d<=BEAM&&dot>=0.60)setv(x,y,Math.min(1,0.65+dot*0.4))}}
   for(let i=0;i<vis.length;i++)if(vis[i]>0.25)R.seen[i]=1;
   return vis}
-function updateFog(vis){const {data,tex}=R.fog,W=24,H=15;
+function updateFog(vis){const {data,tex}=R.fog,W=sim.site.w,H=sim.site.h;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i=y*W+x;
     const v=vis[i]>0?vis[i]:(R.seen[i]?0.30:0);
     data[((H-1-y)*W+x)*4+3]=Math.round((1-Math.max(0,Math.min(1,v)))*236)}
   tex.needsUpdate=true}
-function seenAt(p){return R.seen&&R.seen[p[1]*24+p[0]]}
+function seenAt(p){return R.seen&&R.seen[p[1]*sim.site.w+p[0]]}
 function buildUnits(){const G=R.unitG;
   while(G.children.length)G.remove(G.children[0]);
   R.units={};
@@ -1925,13 +1957,14 @@ function sceneSync(){if(!R||!sim)return;
   const site=sim.site;
   const vis=computeVision();updateFog(vis);
   // objects: hidden until discovered, dimmed once out of the light again
+  const VW=site.w;
   for(const k in R.tileObjs){const p=k.split(",").map(Number);
-    const i=p[1]*24+p[0],now=vis[i]>0.05,ever=!!R.seen[i];
+    const i=p[1]*VW+p[0],now=vis[i]>0.05,ever=!!R.seen[i];
     for(const m of R.tileObjs[k]){m.visible=ever;
       if(ever&&m.userData.base&&m.material&&m.material.color)
         m.material.color.copy(m.userData.base).multiplyScalar(now?1:0.55)}}
   for(const dk in R.doors){const p=dk.split(",").map(Number);
-    R.doors[dk].hinge.visible=!!R.seen[p[1]*24+p[0]]}
+    R.doors[dk].hinge.visible=!!R.seen[p[1]*VW+p[0]]}
   // room tint + warm room lights
   for(const[name,mesh]of Object.entries(R.roomFloors)){
     const f=name==="Van"?0.8:lightFactor(name);
@@ -2153,7 +2186,7 @@ function bindInput(el){
     if(dragMoved&&ptrs.size===1){
       const wpp=(2*R.cam.half)/R.W;
       R.cam.tx=R.cam.cx=Math.max(4,Math.min(20,R.cam.cx-dx*wpp));
-      R.cam.tz=R.cam.cz=Math.max(3,Math.min(11,R.cam.cz-dy*wpp*1.5))}});
+      R.cam.tz=R.cam.cz=Math.max(3,Math.min(15.5,R.cam.cz-dy*wpp*1.5))}});
   const up=e=>{const p=ptrs.get(e.pointerId);ptrs.delete(e.pointerId);
     if(ptrs.size<2)pinch0=null;
     if(p&&!dragMoved&&ptrs.size===0)tapAt(e)};
@@ -2170,7 +2203,7 @@ function tapAt(e){if(!sim||sim.over)return;
   const hit=new THREE.Vector3();
   if(!ray.ray.intersectPlane(groundPlane,hit))return;
   const p=[Math.floor(hit.x),Math.floor(hit.z)];
-  if(p[0]<0||p[1]<0||p[0]>=24||p[1]>=15)return;
+  if(p[0]<0||p[1]<0||p[0]>=sim.site.w||p[1]>=sim.site.h)return;
   tapTile(p)}
 function popup(text,color,p,scale=1){if(!R)return;
   const spr=makeWord(text,color);
@@ -2292,7 +2325,7 @@ function deploy(){if(!sim)newContract();
   SND.init();
   closeDrawer();$("#ticker").innerHTML="";
   init3D();
-  camFollow([11,12]);
+  camFollow([11,15]);
   renderAll();logFlush()}
 $("#btnDeploy").onclick=deploy;
 let lastTab="log";
@@ -2365,26 +2398,43 @@ function modal(title,body,btns){$("#mTitle").textContent=title;
     b.textContent=label;if(cls)b.className=cls;b.onclick=fn;row.appendChild(b)});
   $("#modal").classList.add("on")}
 function closeModal(){$("#modal").classList.remove("on")}
+// Tiles are for walking. Everything you operate is an explicit button in the
+// action bar, so nothing fires because a tap landed one tile off.
+function adjacent(s){const site=sim.site,out=[];
+  if(!s||!s.mobile())return out;
+  const near=(p)=>cheb(s.pos,p)<=1;
+  for(const[dx,dy]of[[0,0],...D8]){
+    const p=[s.pos[0]+dx,s.pos[1]+dy],k=p[0]+","+p[1];
+    if(site.kind[k]==="door")out.push({label:(site.doorOpen[k]?"Close":"Open")+
+      " door",run:()=>sim.actDoor(s,p)});
+    if((site.searchLeft[k]||[]).length)out.push({label:"Search",
+      run:()=>sim.actInteract(s,"search",p)});
+    if((site.floorItems[k]||[]).length)out.push({
+      label:"Pick up "+RNAME[site.floorItems[k][0]],
+      run:()=>sim.actPickup(s,p)});
+    if(site.saltLines[k]&&site.saltLines[k].record)out.push({label:"Read salt line",
+      run:()=>sim.actInteract(s,"salt_check",p)});
+    if(sim.anchorFound&&!sim.anchorConfirmed&&site.room(p)===sim.anchorRoom&&
+       Object.values(ANCHORS).some(sp=>sp.some(a=>a[0]===p[0]&&a[1]===p[1])))
+      out.push({label:"Inspect anchor",run:()=>sim.actInteract(s,"inspect",p)});
+  }
+  if(near(FURNACE))out.push({label:(site.furnaceOn?"Kill":"Light")+" furnace",
+    run:()=>sim.actInteract(s,"furnace",FURNACE)});
+  if(near(BREAKER))out.push({label:"Breaker "+(site.breakerOn?"off":"on"),
+    run:()=>sim.actInteract(s,"breaker",BREAKER)});
+  if(!sim.alpha.rescued&&!sim.hosted&&sim.alpha.carriedBy==null&&
+     near(sim.alpha.pos)&&!s.carrying)
+    out.push({label:"Shoulder the Alpha",run:()=>sim.actLift(s),primary:true});
+  for(const o of sim.squad)
+    if(o.downed&&!o.dead&&near(o.pos)&&!s.carrying&&!o.carrying)
+      out.push({label:"Carry "+o.name,run:()=>sim.actLift(s)});
+  // de-duplicate labels (two identical doors, two searchables, ...)
+  const seenL=new Set();
+  return out.filter(a=>seenL.has(a.label)?false:(seenL.add(a.label),true))}
 function tapTile(p){const site=sim.site;
   const unit=sim.squad.find(s=>s.mobile()&&s.pos[0]===p[0]&&s.pos[1]===p[1]);
   if(unit&&unit!==sel){sel=unit;camFollow(unit.pos);renderAll();return}
   if(!sel||!sel.mobile()){toast("select a specialist first");return}
-  const k=p[0]+","+p[1];
-  if(cheb(sel.pos,p)<=1&&(sel.pos[0]!==p[0]||sel.pos[1]!==p[1])){
-    if(site.kind[k]==="door"){act(sim.actDoor(sel,p));return}
-    if(p[0]===FURNACE[0]&&p[1]===FURNACE[1]){act(sim.actInteract(sel,"furnace",p));return}
-    if(p[0]===BREAKER[0]&&p[1]===BREAKER[1]){act(sim.actInteract(sel,"breaker",p));return}
-    if((site.searchLeft[k]||[]).length){act(sim.actInteract(sel,"search",p));return}
-    if(site.saltLines[k]){act(sim.actInteract(sel,"salt_check",p));return}
-    if((site.floorItems[k]||[]).length){act(sim.actPickup(sel,p));return}
-    if(!sim.alpha.rescued&&!sim.hosted&&sim.alpha.carriedBy==null&&
-       sim.alpha.pos[0]===p[0]&&sim.alpha.pos[1]===p[1]){
-      act(sim.actLift(sel));return}
-    if(sim.anchorFound&&site.room(p)===sim.anchorRoom&&!sim.anchorConfirmed&&
-       Object.values(ANCHORS).some(sp=>sp.some(a=>a[0]===p[0]&&a[1]===p[1]))){
-      act(sim.actInteract(sel,"inspect",p));return}
-    const dsp=sim.squad.find(s=>s.downed&&!s.dead&&s.pos[0]===p[0]&&s.pos[1]===p[1]);
-    if(dsp){act(sim.actLift(sel));return}}
   if(site.walkable(p)){
     const blocked=sim.squad.filter(o=>o!==sel&&o.mobile()).map(o=>o.pos);
     const plan=site.path(sel.pos,p,{blocked});
@@ -2397,15 +2447,15 @@ function tapTile(p){const site=sim.site;
   else{const ex=explainTile(p);toast(ex||"blocked")}}
 function explainTile(p){
   if(p[0]===FURNACE[0]&&p[1]===FURNACE[1])
-    return"The FURNACE — walk beside it, then tap it to heat the site.";
+    return"The FURNACE — stand beside it, then use LIGHT FURNACE in the action bar.";
   if(p[0]===BREAKER[0]&&p[1]===BREAKER[1])
-    return"The BREAKER — walk beside it, then tap it to cut or restore power.";
+    return"The BREAKER — stand beside it, then use BREAKER OFF/ON in the action bar.";
   if(!sim.alpha.rescued&&!sim.hosted&&sim.alpha.carriedBy==null&&
      sim.alpha.pos[0]===p[0]&&sim.alpha.pos[1]===p[1])
-    return"The downed Alpha — walk next to them and tap to shoulder them. You are the extraction.";
+    return"The downed Alpha — stand next to them, then SHOULDER THE ALPHA. You are the extraction.";
   if(sim.anchorConfirmed&&p[0]===sim.contract.anchor[0]&&
      p[1]===sim.contract.anchor[1])
-    return"The ANCHOR — place the rite reagents here (PLACE), then Channel within 1 tile.";
+    return"The ANCHOR — stand beside it, PLACE the rite reagents, then CHANNEL.";
   return null}
 function act([ok,msg]){toast(msg);
   if(ok)SND.play(msg.includes("door")?"door":"tap");
@@ -2415,6 +2465,8 @@ function renderActs(){const el=$("#acts");el.innerHTML="";
     b.textContent=label;if(opts.cls)b.className=opts.cls;
     b.disabled=!!opts.dis;b.onclick=fn;el.appendChild(b);return b};
   if(sel&&sel.mobile()){
+    for(const a of adjacent(sel))
+      mk2(a.label,()=>act(a.run()),{cls:a.primary?"primary":"on"});
     const b=mk2("Sprint",()=>{sprint=!sprint;renderAll()});
     if(sprint)b.classList.add("on");
     if(sel.hidden)mk2("Slip out",()=>act(sim.actUnhide(sel)));

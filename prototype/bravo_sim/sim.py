@@ -619,7 +619,7 @@ class Sim:
             s.steadied = False
 
     def _bolt(self, s):
-        away = self.site.path(s.pos, (11, 14), for_ghost=False)  # toward the van
+        away = self.site.path(s.pos, (11, 17), for_ghost=False)  # toward the van
         if away:
             s.pos = away[min(3, len(away) - 1)]
         self.log(f"! {s.name} is Rattled — BOLT.")

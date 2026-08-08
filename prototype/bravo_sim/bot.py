@@ -372,7 +372,7 @@ class Bot:
                             ok, _ = sim.act_pickup(s, floor[0], item)
                             acted = ok
                     elif item in crate:
-                        if self.goto(s, (11, 14)) and s.ap > 0:
+                        if self.goto(s, (11, 17)) and s.ap > 0:
                             ok, _ = sim.take_from_crate(s, item)
                             acted = ok
                         if not acted and s.ap <= 0:
@@ -567,7 +567,7 @@ class Bot:
         for p in self.sim.site.room_tiles("Van"):
             if s.pos == p or self.free(p, s):
                 return p
-        return (12, 14)
+        return (12, 17)
 
     def extract(self):
         sim = self.sim

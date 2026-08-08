@@ -32,7 +32,9 @@ def _map():
         tiles = site.room_tiles(room)
         assert tiles, f"{room} has no tiles"
         target = next(t for t in tiles if site.furn.get(t) is None)
-        assert site.path(start, target, for_ghost=True) is not None, \
+        # crew reachability: doors are opened en route. (for_ghost would be
+        # wrong here — it bans van/yard tiles, which is where the crew starts.)
+        assert site.path(start, target, doors_ok=True) is not None, \
             f"{room} unreachable"
 
 
