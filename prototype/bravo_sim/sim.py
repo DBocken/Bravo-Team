@@ -101,7 +101,7 @@ class Sim:
             Specialist("Okafor", "Warden", van[1]),
             Specialist("Lis", "Scout", van[2]),
         ]
-        self.alpha = dict(pos=self.contract.alpha_pos, tagged=False,
+        self.alpha = dict(pos=self.contract.alpha_pos, tagged=True,
                           rescued=False, carried_by=None)
         if self.contract.true_ghost == "banshee":
             self.marked = self.rng.choice([s.name for s in self.squad])
@@ -301,13 +301,7 @@ class Sim:
                 return True, f"found {data.REAGENT_NAMES[item]}"
             return True, f"found {data.REAGENT_NAMES[item]} but hands are full"
         if what == "tag":
-            if self.hosted:
-                return True, "the body is not where you left it — it walks"
-            if self.site.chebyshev(s.pos, self.alpha["pos"]) > 1 \
-                    or self.alpha["tagged"]:
-                return True, "no one to tag"
-            self.alpha["tagged"] = True
-            return True, f"{s.name} tags the Alpha victim for extraction"
+            return True, "no tagging needed — walk up and shoulder them"
         if what == "inspect":
             if p == self.contract.anchor:
                 self.anchor_confirmed = True
@@ -517,8 +511,7 @@ class Sim:
     def act_lift(self, s):
         if s.carrying:
             return False, "already carrying"
-        if self.alpha["tagged"] and not self.alpha["rescued"] and \
-                not self.hosted and \
+        if not self.alpha["rescued"] and not self.hosted and \
                 self.alpha["carried_by"] is None and \
                 self.site.chebyshev(s.pos, self.alpha["pos"]) <= 1:
             if not self._spend(s, 1):
@@ -527,7 +520,7 @@ class Sim:
             self.alpha["carried_by"] = s.name
             self.alpha["pos"] = s.pos
             self._make_noise(s.pos, 2)
-            return True, f"{s.name} lifts the Alpha"
+            return True, f"{s.name} shoulders the Alpha"
         for o in self.squad:
             if o.downed and not o.dead and \
                     self.site.chebyshev(s.pos, o.pos) <= 1 and o.carrying is None:
@@ -535,7 +528,7 @@ class Sim:
                     return False, "no AP"
                 s.carrying = o.name
                 return True, f"{s.name} lifts {o.name}"
-        return False, "no body adjacent (Alpha must be tagged)"
+        return False, "no body adjacent"
 
     def act_lower(self, s):
         if not s.carrying:

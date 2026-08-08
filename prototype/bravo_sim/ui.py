@@ -86,7 +86,7 @@ HELP = """commands (specialists: v=Vance o=Okafor l=Lis; tiles: x,y):
   map | status | journal | report | help | end
   move <s> <x,y>      sprint <s> <x,y>     door <s> <x,y>
   hide <s> | unhide <s> | steady <s>
-  interact <s> <furnace|breaker|light|search|tag|inspect|salt_check|crate> [x,y]
+  interact <s> <furnace|breaker|light|search|inspect|salt_check|crate> [x,y]
   take <s> <item>     place <s> <item>     channel <s>
   pickup <s> <x,y>    lift <s> | lower <s>
   challenge <ghost>   (hantu demon mare jinn wraith yurei

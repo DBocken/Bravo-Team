@@ -581,12 +581,9 @@ class Bot:
                               sim.site.chebyshev(s.pos, alpha["pos"]))
                 s = rescuer
                 if self.goto(s, alpha["pos"], adj=True) and s.ap > 0:
-                    if not alpha["tagged"]:
-                        sim.act_interact(s, "tag", alpha["pos"])
-                    if s.ap > 0 and alpha["tagged"]:
-                        sim.act_lift(s)
-                        if s.carrying == "alpha":
-                            carrier = s
+                    sim.act_lift(s)
+                    if s.carrying == "alpha":
+                        carrier = s
         for s in sim.squad:
             if not s.mobile() or s is rescuer and s is not carrier:
                 continue

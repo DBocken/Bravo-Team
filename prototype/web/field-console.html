@@ -186,19 +186,24 @@ body.locked{overflow:hidden}
           <option value="blackout">Blackout — no ID given</option>
         </select></label>
       <label><span class="lbl">Contract seed</span><input id="selSeed" type="number" value="7" style="width:90px"></label>
-      <button class="primary" id="btnNew">File contract</button>
-      <button id="btnTut">First shift? Run the training contract</button>
+      <button id="btnNew">File contract</button>
+    </div>
+    <div class="setup">
+      <button class="primary" id="btnTut" style="font-size:14px;padding:12px 18px">
+        ▶ Training shift — start here on your first night</button>
     </div>
     <div class="form" id="formText"></div>
     <div class="setup"><button class="primary" id="btnDeploy">Deploy the Bravo shift</button></div>
     <div class="help">
       <b>How a shift runs.</b> Tap a specialist, then a glowing tile to move (2 AP each, move = 1 AP).
-      Tap adjacent things to use them: doors, the furnace <b>F</b>, the breaker <b>B</b>, searchable
-      furniture, salt lines, the downed Alpha, <b>?</b> anchor candidates. Confirm the entity from its
-      Tells in the Journal — the report is a hypothesis. Place the rite reagents at the Anchor
-      <b>A</b>, meet the rite's condition, and Channel until the banishment banks. Dread only climbs;
-      at 60+ the dial shows the Hunt odds. When it hunts: break line of sight, hide, or finish
-      the rite — completion ends a Hunt instantly. Carry the Alpha to the van before you leave.
+      Tap adjacent things to use them: doors, the furnace <b>F</b> (heats
+      the site), the breaker <b>B</b> (site power), searchable furniture,
+      salt lines, <b>?</b> anchor candidates — and the downed Alpha: walk up
+      and tap them to shoulder them. No tagging, no paperwork — <b>you are
+      the extraction</b>. Confirm the entity from its Tells in the Journal,
+      place the rite reagents at the Anchor <b>A</b>, meet the rite's
+      condition, and Channel until the banishment banks. In-game, the
+      <b>?</b> button opens the full field guide.
     </div>
   </div>
 
@@ -221,12 +226,44 @@ body.locked{overflow:hidden}
     <button data-t="log">LOG</button>
     <button data-t="journal">JNL</button>
     <button data-t="report">DOS</button>
+    <button data-t="guide">?</button>
   </div>
   <div id="drawer">
     <div class="dhead"><span id="dtitle">LOG</span><button id="dclose">✕</button></div>
     <div class="pane on" id="log"></div>
     <div class="pane" id="journal"></div>
     <div class="pane" id="report"></div>
+    <div class="pane" id="guide">
+      <b style="color:var(--hazard)">MAP</b><br>
+      <b>F</b> — the furnace. Stand beside it, tap it: heats the site room by
+      room. The Warming Rite needs a warm Anchor room; warmth also slows a
+      Hantu.<br>
+      <b>B</b> — the breaker. Stand beside it, tap it: site power on/off.
+      Lights need it; a Jinn feeds on it; the Smokeless Fire rite wants it
+      OFF.<br>
+      <b>?</b> — possible Anchor objects (after the hum). Stand beside one
+      and tap to inspect.<br>
+      <b>A</b> — the confirmed Anchor: place the rite reagents here, then
+      Channel within 1 tile.<br>
+      <b>Wardrobes / beds</b> — hiding spots (HIDE button when adjacent).<br>
+      <b>White dashes</b> — your salt lines. Tap one after the ghost crossed:
+      the prints identify it.<br>
+      <b>Amber dots</b> — dropped items, tap adjacent to recover. Amber
+      squares on furniture — searchable.<br>
+      <b>Red body</b> — the downed Alpha. Walk next to them, tap to shoulder
+      them, carry them to the van. No paperwork — you are the extraction.<br>
+      <br><b style="color:var(--hazard)">CONTROLS</b><br>
+      Tap a card or token to select · tap a glowing tile to move · tap
+      adjacent doors and objects to use them · drag to pan · pinch or wheel
+      to zoom · SND toggles audio.<br>
+      <br><b style="color:var(--hazard)">THE NIGHT</b><br>
+      Confirm the entity from its Tells (JNL) — the report can be wrong.
+      Place its rite reagents at A, meet the rite's condition, Channel until
+      it banks. Dread only rises; from 60 the dial shows Hunt odds. During a
+      Hunt: hide, break line of sight, or finish the rite — completion ends
+      the Hunt instantly. Then shoulder the Alpha and walk everyone to the
+      van.
+    </div>
   </div>
   <div id="ticker"></div>
 </div>
@@ -617,7 +654,7 @@ class Sim{
     const van=this.site.roomTiles("Van");
     this.squad=[this.mk("Vance","Ritualist",van[0]),this.mk("Okafor","Warden",van[1]),
       this.mk("Lis","Scout",van[2])];
-    this.alpha={pos:this.contract.alphaPos.slice(),tagged:false,rescued:false,carriedBy:null};
+    this.alpha={pos:this.contract.alphaPos.slice(),tagged:true,rescued:false,carriedBy:null};
     if(this.contract.trueGhost==="banshee")this.marked=this.rng.choice(this.squad.map(s=>s.name));
     this.humRooms=new Set();this.propertyDamage=0;
     this.loadout()}
@@ -715,9 +752,7 @@ class Sim{
       if(s.items.length<4){s.items.push(item);return[true,"found "+RNAME[item]]}
       this.site.floorItems[key(p)]=(this.site.floorItems[key(p)]||[]).concat([item]);
       return[true,"found "+RNAME[item]+" but hands are full — left on the floor"]}
-    case"tag":if(this.hosted)return[true,"the body is not where you left it — it walks"];
-      if(cheb(s.pos,this.alpha.pos)>1||this.alpha.tagged)return[true,"no one to tag"];
-      this.alpha.tagged=true;return[true,s.name+" tags the Alpha for extraction"];
+    case"tag":return[true,"no tagging needed — walk up and shoulder them"];
     case"inspect":if(key(p)===key(this.contract.anchor)){this.anchorConfirmed=true;
         return[true,"ANCHOR CONFIRMED — this is the tether"]}
       return[true,"nothing — this object is inert"];
@@ -806,11 +841,12 @@ class Sim{
   actSteady(s){if(!this.spend(s,1))return[false,"no AP"];
     s.steadied=true;return[true,s.name+" steadies"]}
   actLift(s){if(s.carrying)return[false,"already carrying"];
-    if(this.alpha.tagged&&!this.alpha.rescued&&!this.hosted&&this.alpha.carriedBy==null&&
+    if(!this.alpha.rescued&&!this.hosted&&this.alpha.carriedBy==null&&
        cheb(s.pos,this.alpha.pos)<=1){
       if(!this.spend(s,1))return[false,"no AP"];
       s.carrying="alpha";this.alpha.carriedBy=s.name;this.alpha.pos=s.pos.slice();
-      this.makeNoise(s.pos,2);return[true,s.name+" lifts the Alpha"]}
+      this.makeNoise(s.pos,2);
+      return[true,s.name+" shoulders the Alpha — carry them to the van"]}
     for(const o of this.squad)if(o.downed&&!o.dead&&cheb(s.pos,o.pos)<=1&&!o.carrying){
       if(!this.spend(s,1))return[false,"no AP"];
       s.carrying=o.name;return[true,s.name+" lifts "+o.name]}
@@ -1340,6 +1376,15 @@ function spriteTx(txt,color){const k="sp:"+txt+color;if(TEX[k])return TEX[k];
   g.textBaseline="middle";g.shadowColor="#000";g.shadowBlur=8;
   g.fillStyle=color;g.fillText(txt,32,34);
   const t=new THREE.CanvasTexture(c);TEX[k]=t;return t}
+function makeWord(txt,color){const k="wd:"+txt+color;
+  if(!TEX[k]){const c=document.createElement("canvas");c.width=256;c.height=48;
+    const g=c.getContext("2d");g.font="bold 30px Arial";g.textAlign="center";
+    g.textBaseline="middle";g.shadowColor="#000";g.shadowBlur=7;
+    g.fillStyle=color;g.fillText(txt,128,26);
+    TEX[k]=new THREE.CanvasTexture(c)}
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX[k],
+    transparent:true,depthWrite:false}));
+  s.scale.set(2.1,0.4,1);return s}
 function makeSprite(txt,color,scale=0.66){
   const m=new THREE.SpriteMaterial({map:spriteTx(txt,color),transparent:true,
     depthWrite:false});
@@ -1547,8 +1592,12 @@ function buildUnits(){const G=R.unitG;
     ring.rotation.x=-Math.PI/2;ring.position.y=0.02;ring.visible=false;
     grp.add(ring);
     const tag=makeSprite(s.name[0],"#F0E9D8",0.62);tag.position.y=1.22;grp.add(tag);
+    const burden=new THREE.Mesh(new THREE.CapsuleGeometry(0.13,0.3,4,8),
+      new THREE.MeshLambertMaterial({color:0x9A4B44}));
+    burden.rotation.z=Math.PI/2.3;burden.position.set(0.05,0.78,-0.12);
+    burden.castShadow=true;burden.visible=false;grp.add(burden);
     R.unitG.add(grp);
-    R.units[s.name]={grp,body,ring,tag}}
+    R.units[s.name]={grp,body,ring,tag,burden}}
   // ghost
   const gm=new THREE.Mesh(new THREE.SphereGeometry(0.32,20,16),
     new THREE.MeshBasicMaterial({color:0x7FD6B4,transparent:true,opacity:0.7,
@@ -1629,6 +1678,9 @@ function sceneSync(){if(!R||!sim)return;
     m.position.set(p[0]+0.28,0.14,p[1]+0.7);G.add(m)}
   // markers
   const markers=[["F",FURNACE,"#C8564C"],["B",BREAKER,"#DFA457"]];
+  for(const[txt,mp,mc]of[["FURNACE",FURNACE,"#C8564C"],
+      ["BREAKER",BREAKER,"#DFA457"]]){
+    const s=makeWord(txt,mc);s.position.set(mp[0]+0.5,0.42,mp[1]+0.5);G.add(s)}
   if(sim.anchorFound&&!sim.anchorConfirmed&&sim.anchorRoom)
     for(const spots of Object.values(ANCHORS))for(const p of spots)
       if(site.room(p)===sim.anchorRoom)markers.push(["?",p,"#7FD6B4"]);
@@ -1653,6 +1705,7 @@ function sceneSync(){if(!R||!sim)return;
     u.body.rotation.z=(s.downed||s.dead)?Math.PI/2:0;
     u.body.position.y=(s.downed||s.dead)?0.2:0.42;
     u.ring.visible=sel===s;
+    u.burden.visible=!!s.carrying;
     u.tag.material.opacity=s.hidden?0.4:1}
   // alpha visibility
   R.alphaM.visible=!sim.alpha.rescued&&sim.alpha.carriedBy==null&&!sim.hosted;
@@ -1877,7 +1930,8 @@ function openDrawer(t){lastTab=t;
   document.querySelectorAll(".pane").forEach(p=>
     p.classList.toggle("on",p.id===t));
   $("#dtitle").textContent=t==="log"?"SHIFT LOG":
-    (t==="journal"?"FIELD JOURNAL":"ALPHA DOSSIER");
+    (t==="journal"?"FIELD JOURNAL":
+     (t==="guide"?"FIELD GUIDE":"ALPHA DOSSIER"));
   $("#drawer").classList.add("on");
   if(t==="journal")renderJournal();
   tutCheck()}
@@ -1953,8 +2007,7 @@ function tapTile(p){const site=sim.site;
     if((site.floorItems[k]||[]).length){act(sim.actPickup(sel,p));return}
     if(!sim.alpha.rescued&&!sim.hosted&&sim.alpha.carriedBy==null&&
        sim.alpha.pos[0]===p[0]&&sim.alpha.pos[1]===p[1]){
-      if(!sim.alpha.tagged){act(sim.actInteract(sel,"tag",p))}
-      else act(sim.actLift(sel));return}
+      act(sim.actLift(sel));return}
     if(sim.anchorFound&&site.room(p)===sim.anchorRoom&&!sim.anchorConfirmed&&
        Object.values(ANCHORS).some(sp=>sp.some(a=>a[0]===p[0]&&a[1]===p[1]))){
       act(sim.actInteract(sel,"inspect",p));return}
@@ -1967,8 +2020,21 @@ function tapTile(p){const site=sim.site;
     const res=sim.actMove(sel,p,sprint);
     if(res[0]&&plan){anim[sel.name]={x:from[0],y:from[1]};
       startWalk(sel.name,[from,...plan],sprint?60:95)}
+    if(!res[0]){const ex=explainTile(p);if(ex){toast(ex);return}}
     act(res)}
-  else toast("blocked")}
+  else{const ex=explainTile(p);toast(ex||"blocked")}}
+function explainTile(p){
+  if(p[0]===FURNACE[0]&&p[1]===FURNACE[1])
+    return"The FURNACE — walk beside it, then tap it to heat the site.";
+  if(p[0]===BREAKER[0]&&p[1]===BREAKER[1])
+    return"The BREAKER — walk beside it, then tap it to cut or restore power.";
+  if(!sim.alpha.rescued&&!sim.hosted&&sim.alpha.carriedBy==null&&
+     sim.alpha.pos[0]===p[0]&&sim.alpha.pos[1]===p[1])
+    return"The downed Alpha — walk next to them and tap to shoulder them. You are the extraction.";
+  if(sim.anchorConfirmed&&p[0]===sim.contract.anchor[0]&&
+     p[1]===sim.contract.anchor[1])
+    return"The ANCHOR — place the rite reagents here (PLACE), then Channel within 1 tile.";
+  return null}
 function act([ok,msg]){toast(msg);
   if(ok)SND.play(msg.includes("door")?"door":"tap");
   if(ok)sprint=false;renderAll();logFlush()}
@@ -2085,8 +2151,9 @@ const TUTS=[
    done:()=>lastTab==="journal"},
  {text:"END THE TURN. The ghost acts in its own phase — you only see what your "+
    "people see or hear (rings). The Dread gauge climbs every round; from 60 it "+
-   "shows live Hunt odds. Dread is your clock.",sel:"#btnEnd",
-   done:()=>sim.round>=2},
+   "shows live Hunt odds. Dread is your clock. (The ? button on the right "+
+   "opens the field guide — every map symbol is explained there.)",
+   sel:"#btnEnd",done:()=>sim.round>=2},
  {text:"The Hantu's Warming Rite needs heat: reach the furnace F in the mudroom "+
    "and tap it to light it. Watch the rooms warm — and brighten — over the next "+
    "rounds.",tile:[15,3],done:()=>sim.site.furnaceOn},
@@ -2101,9 +2168,10 @@ const TUTS=[
    "later — hide, break line of sight… or finish the rite: a completed banishment "+
    "ends any Hunt instantly. Fair scary: every death traces to a decision.",
    next:true},
- {text:"After the banishment: tap the fallen Alpha to TAG them, tap again to "+
-   "lift, carry them to the van, and walk the whole squad out. H&V pays on "+
-   "delivery.",done:()=>sim.over},
+ {text:"After the banishment: walk next to the fallen Alpha (the red body), "+
+   "tap them to shoulder them, carry them to the van, and walk the whole "+
+   "squad out. You are the extraction — H&V pays on delivery.",
+   done:()=>sim.over},
  {text:"Training complete. Take a Standard contract next — and when you're ready, "+
    "Veteran: there the report can be wrong, and the real game begins. Trust the "+
    "site, not the paper.",next:true},
