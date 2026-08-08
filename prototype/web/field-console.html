@@ -1342,12 +1342,39 @@ function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("on");
 // ================= THREE scene =================
 let R=null;           // renderer bundle
 const TEX={},GEO={},MAT={};
+const SRC={};   // name -> source canvas (for normal-map derivation)
 function tex(name,fn,rw=1,rh=1){if(TEX[name])return TEX[name];
   const c=document.createElement("canvas");c.width=128;c.height=128;
   fn(c.getContext("2d"),128,128);
+  SRC[name]=c;
   const t=new THREE.CanvasTexture(c);
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rw,rh);
   TEX[name]=t;return t}
+// Sobel height->normal: gives every procedural surface real relief under the
+// point lights, at zero asset cost.
+function normalOf(name,strength=2.4){const k="n:"+name;
+  if(TEX[k])return TEX[k];
+  const src=SRC[name];if(!src)return null;
+  const w=src.width,h=src.height;
+  const d=src.getContext("2d").getImageData(0,0,w,h).data;
+  const L=(x,y)=>{x=(x+w)%w;y=(y+h)%h;const i=(y*w+x)*4;
+    return (d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114)/255};
+  const out=document.createElement("canvas");out.width=w;out.height=h;
+  const og=out.getContext("2d"),od=og.createImageData(w,h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    let nx=(L(x-1,y)-L(x+1,y))*strength,ny=(L(x,y-1)-L(x,y+1))*strength,nz=1;
+    const len=Math.hypot(nx,ny,nz);nx/=len;ny/=len;nz/=len;
+    const i=(y*w+x)*4;
+    od.data[i]=(nx*0.5+0.5)*255;od.data[i+1]=(ny*0.5+0.5)*255;
+    od.data[i+2]=(nz*0.5+0.5)*255;od.data[i+3]=255}
+  og.putImageData(od,0,0);
+  const t=new THREE.CanvasTexture(out);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;TEX[k]=t;return t}
+function surface(color,mapName,rough=0.92){
+  const o={color,roughness:rough,metalness:0.0};
+  if(mapName){o.map=TEX[mapName];const n=normalOf(mapName);
+    if(n){o.normalMap=n;o.normalScale=new THREE.Vector2(0.7,0.7)}}
+  return new THREE.MeshStandardMaterial(o)}
 function noise(g,w,h,alpha,n=900){for(let i=0;i<n;i++){
   g.fillStyle="rgba("+(Math.random()<.5?"0,0,0":"255,255,255")+","+
     (Math.random()*alpha)+")";
@@ -1449,6 +1476,101 @@ const ROOMBASE={Kitchen:0xB9A47E,Pantry:0xA89B7C,Mudroom:0xA39784,
 const CLSCOL={Ritualist:0xDFA457,Warden:0x8A9BB0,Scout:0x7FD6B4};
 const W2=(p)=>({x:p[0]+0.5,z:p[1]+0.5});   // tile -> world center
 
+// ---- post-processing (hand-rolled: three's UMD build ships no composer) ----
+const VERT=`varying vec2 vUv;void main(){vUv=uv;
+ gl_Position=vec4(position.xy,0.0,1.0);}`;
+const FRAG_BRIGHT=`uniform sampler2D tDiffuse;uniform float threshold,knee;
+ varying vec2 vUv;
+ void main(){vec4 c=texture2D(tDiffuse,vUv);
+  float l=dot(c.rgb,vec3(0.2126,0.7152,0.0722));
+  gl_FragColor=vec4(c.rgb*smoothstep(threshold,threshold+knee,l),1.0);}`;
+const FRAG_BLUR=`uniform sampler2D tDiffuse;uniform vec2 dir;varying vec2 vUv;
+ void main(){vec3 s=vec3(0.0);
+  s+=texture2D(tDiffuse,vUv-dir*4.0).rgb*0.0162;
+  s+=texture2D(tDiffuse,vUv-dir*3.0).rgb*0.0540;
+  s+=texture2D(tDiffuse,vUv-dir*2.0).rgb*0.1216;
+  s+=texture2D(tDiffuse,vUv-dir).rgb*0.1946;
+  s+=texture2D(tDiffuse,vUv).rgb*0.2270;
+  s+=texture2D(tDiffuse,vUv+dir).rgb*0.1946;
+  s+=texture2D(tDiffuse,vUv+dir*2.0).rgb*0.1216;
+  s+=texture2D(tDiffuse,vUv+dir*3.0).rgb*0.0540;
+  s+=texture2D(tDiffuse,vUv+dir*4.0).rgb*0.0162;
+  gl_FragColor=vec4(s,1.0);}`;
+const FRAG_COMP=`uniform sampler2D tScene,tBloom;
+ uniform float uBloom,uTime,uDread,uHunt,uVig,uExposure;varying vec2 vUv;
+ vec3 aces(vec3 x){return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0);}
+ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ void main(){vec2 d=vUv-0.5;
+  float ca=0.0022*uHunt;                       // hunts fray the image
+  vec3 col;
+  col.r=texture2D(tScene,vUv+d*ca).r;
+  col.g=texture2D(tScene,vUv).g;
+  col.b=texture2D(tScene,vUv-d*ca).b;
+  col+=texture2D(tBloom,vUv).rgb*uBloom;
+  float lum=dot(col,vec3(0.2126,0.7152,0.0722));
+  col=mix(col,vec3(lum),0.10+0.22*uDread);     // dread drains the color
+  col*=mix(vec3(0.93,0.98,1.08),vec3(1.10,0.92,0.84),uDread);
+  col+=vec3(0.30,0.04,0.03)*uHunt*0.10;
+  float v=1.0-uVig*dot(d,d)*1.85;
+  col*=clamp(v,0.0,1.0);
+  col=aces(col*uExposure);
+  col+=(hash(vUv*vec2(1024.0,768.0)+uTime)-0.5)*0.032;   // film grain
+  gl_FragColor=vec4(pow(max(col,0.0),vec3(1.0/2.2)),1.0);}`;
+function makeRT(w,h,depth){return new THREE.WebGLRenderTarget(
+  Math.max(2,Math.floor(w)),Math.max(2,Math.floor(h)),
+  {minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
+   type:THREE.UnsignedByteType,format:THREE.RGBAFormat,
+   depthBuffer:!!depth,stencilBuffer:false})}
+function fsPass(frag,uniforms){
+  const mat=new THREE.ShaderMaterial({vertexShader:VERT,fragmentShader:frag,
+    uniforms,depthTest:false,depthWrite:false});
+  const scene=new THREE.Scene();
+  scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),mat));
+  return {scene,mat}}
+function buildPost(W,H){
+  const px=R&&R.px!=null?R.px:Math.min(devicePixelRatio||1,2);
+  const w=Math.floor(W*px),h=Math.floor(H*px);
+  const bw=Math.max(2,Math.floor(w/2)),bh=Math.max(2,Math.floor(h/2));
+  const P={cam:new THREE.OrthographicCamera(-1,1,1,-1,0,1),
+    rtScene:makeRT(w,h,true),rtA:makeRT(bw,bh),rtB:makeRT(bw,bh),bw,bh};
+  P.bright=fsPass(FRAG_BRIGHT,{tDiffuse:{value:P.rtScene.texture},
+    threshold:{value:0.80},knee:{value:0.28}});
+  P.blur=fsPass(FRAG_BLUR,{tDiffuse:{value:null},dir:{value:new THREE.Vector2()}});
+  P.comp=fsPass(FRAG_COMP,{tScene:{value:P.rtScene.texture},
+    tBloom:{value:P.rtB.texture},uBloom:{value:0.62},uTime:{value:0},
+    uDread:{value:0},uHunt:{value:0},uVig:{value:0.62},uExposure:{value:0.97}});
+  return P}
+function degrade(){if(R.q<=0)return;
+  if(R.q===2){R.px=1;R.renderer.setPixelRatio(1);
+    const old=R.post;R.post=buildPost(R.W,R.H);
+    old.rtScene.dispose();old.rtA.dispose();old.rtB.dispose()}
+  else{R.renderer.shadowMap.enabled=false;
+    R.scene.traverse(o=>{if(o.material)o.material.needsUpdate=true})}
+  R.q--;R.fr=0;R.fsum=0}
+function renderPost(now){const P=R.post,rn=R.renderer;
+  if(R.flast){R.fsum+=now-R.flast;R.fr++;
+    if(R.fr>=60){if(R.fsum/R.fr>30)degrade();R.fr=0;R.fsum=0}}
+  R.flast=now;
+  rn.setRenderTarget(P.rtScene);rn.clear();rn.render(R.scene,R.camera);
+  // bright pass
+  P.bright.mat.uniforms.tDiffuse.value=P.rtScene.texture;
+  rn.setRenderTarget(P.rtA);rn.render(P.bright.scene,P.cam);
+  // separable blur, two widening iterations
+  for(let i=0;i<2;i++){
+    P.blur.mat.uniforms.tDiffuse.value=P.rtA.texture;
+    P.blur.mat.uniforms.dir.value.set((1.4+i*1.9)/P.bw,0);
+    rn.setRenderTarget(P.rtB);rn.render(P.blur.scene,P.cam);
+    P.blur.mat.uniforms.tDiffuse.value=P.rtB.texture;
+    P.blur.mat.uniforms.dir.value.set(0,(1.4+i*1.9)/P.bh);
+    rn.setRenderTarget(P.rtA);rn.render(P.blur.scene,P.cam)}
+  const u=P.comp.mat.uniforms;
+  u.tBloom.value=P.rtA.texture;
+  u.uTime.value=now*0.001;
+  u.uDread.value=sim?Math.min(1,sim.dread/100):0;
+  const hunt=sim&&sim.hunt?1:(sim&&sim.prelude?0.55:0);
+  u.uHunt.value+=(hunt-u.uHunt.value)*0.12;
+  u.uVig.value=0.60+u.uHunt.value*0.40;
+  rn.setRenderTarget(null);rn.render(P.comp.scene,P.cam)}
 function init3D(){
   const host=$("#gl");host.innerHTML="";
   const W=host.clientWidth||innerWidth,H=host.clientHeight||innerHeight;
@@ -1457,16 +1579,19 @@ function init3D(){
   renderer.setSize(W,H);
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  renderer.outputEncoding=THREE.sRGBEncoding;
+  renderer.outputEncoding=THREE.LinearEncoding;   // composite does the grade
+  renderer.toneMapping=THREE.NoToneMapping;
   host.appendChild(renderer.domElement);
   const scene=new THREE.Scene();
-  scene.background=new THREE.Color(0x0A0D12);
-  scene.fog=new THREE.Fog(0x0A0D12,30,58);
+  scene.background=new THREE.Color(0x080B10);
+  scene.fog=new THREE.FogExp2(0x080B10,0.021);
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,0.1,120);
-  scene.add(new THREE.AmbientLight(0x2A3644,1.15));
-  const moon=new THREE.DirectionalLight(0x8FA8C8,0.5);
+  scene.add(new THREE.AmbientLight(0x223040,0.34));
+  scene.add(new THREE.HemisphereLight(0x46617E,0x1A1512,0.16));
+  const moon=new THREE.DirectionalLight(0x8FA8C8,0.30);
   moon.position.set(30,32,-10);moon.castShadow=true;
-  moon.shadow.mapSize.set(1024,1024);
+  moon.shadow.mapSize.set(W>700?2048:1024,W>700?2048:1024);
+  moon.shadow.bias=-0.0012;
   const so=14;Object.assign(moon.shadow.camera,
     {left:-so-4,right:so+16,top:so,bottom:-so});
   moon.shadow.camera.updateProjectionMatrix();
@@ -1481,6 +1606,9 @@ function init3D(){
   R={renderer,scene,camera,staticG,dynG,unitG,fxG,lightG,huntLight,ghostLight,
     doors:{},roomFloors:{},roomLights:{},units:{},ghostM:null,alphaM:null,
     W,H,cam:(()=>{const f=Math.min(8.6,Math.max(4.6,6.4*(W/H)));return{cx:12,cz:10,half:f,tx:12,tz:10,th:f}})()};
+  R.px=Math.min(devicePixelRatio||1,2);
+  R.q=2;R.fr=0;R.fsum=0;R.flast=0;   // adaptive quality state
+  R.post=buildPost(W,H);
   buildStatic();
   buildUnits();
   bindInput(renderer.domElement);
@@ -1491,10 +1619,18 @@ function camFollow(p,zoom){if(!R)return;
   if(zoom)R.cam.th=zoom}
 function resize3D(){if(!R)return;const host=$("#gl");
   R.W=host.clientWidth||innerWidth;R.H=host.clientHeight||innerHeight;
-  R.renderer.setSize(R.W,R.H)}
+  R.renderer.setSize(R.W,R.H);
+  const old=R.post;
+  R.post=buildPost(R.W,R.H);
+  if(old){old.rtScene.dispose();old.rtA.dispose();old.rtB.dispose()}}
 function box(w,h,d,color,map,opts={}){
   const g=new THREE.BoxGeometry(w,h,d);
-  const m=new THREE.MeshLambertMaterial(Object.assign({color},map?{map}:{},opts));
+  const base={color,roughness:0.9,metalness:0.0};
+  if(map){base.map=map;
+    const nm=Object.keys(TEX).find(k=>TEX[k]===map);
+    const n=nm?normalOf(nm):null;
+    if(n){base.normalMap=n;base.normalScale=new THREE.Vector2(0.55,0.55)}}
+  const m=new THREE.MeshStandardMaterial(Object.assign(base,opts));
   const mesh=new THREE.Mesh(g,m);mesh.castShadow=true;mesh.receiveShadow=true;
   return mesh}
 function buildStatic(){
@@ -1510,10 +1646,16 @@ function buildStatic(){
   // room floors (one plane per room, per-room material, tinted by light level)
   for(const[name,r]of Object.entries(ROOMS)){
     const w=r[2]-r[0]+1,d=r[3]-r[1]+1;
-    const ft=floorKind(ROOMFLOOR[name]||"wood").clone();
-    ft.needsUpdate=true;ft.repeat.set(w,d);
+    const kind=ROOMFLOOR[name]||"wood";
+    floorKind(kind);
+    const ft=TEX["f_"+kind].clone();ft.needsUpdate=true;ft.repeat.set(w,d);
+    const nsrc=normalOf("f_"+kind);
+    const nt=nsrc?nsrc.clone():null;
+    if(nt){nt.needsUpdate=true;nt.repeat.set(w,d)}
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
-      new THREE.MeshLambertMaterial({map:ft,color:0xffffff}));
+      new THREE.MeshStandardMaterial({map:ft,color:0xffffff,
+        roughness:kind==="tile"?0.55:0.94,metalness:0,
+        normalMap:nt,normalScale:new THREE.Vector2(0.8,0.8)}));
     mesh.rotation.x=-Math.PI/2;
     mesh.position.set(r[0]+w/2,0,r[1]+d/2);
     mesh.receiveShadow=true;G.add(mesh);
@@ -1641,8 +1783,10 @@ function buildUnits(){const G=R.unitG;
   for(const s of sim.squad){const grp=new THREE.Group();
     const inner=new THREE.Group();grp.add(inner);   // rotates to face movement
     const mats=[];
-    const M=(c,e)=>{const m=new THREE.MeshLambertMaterial(
-      {color:c,transparent:true,emissive:e||0x000000});mats.push(m);return m};
+    const M=(c,e)=>{const m=new THREE.MeshStandardMaterial(
+      {color:c,transparent:true,roughness:0.72,metalness:0.05,
+       emissive:e||0x000000,emissiveIntensity:e?1.4:0});
+      mats.push(m);return m};
     const legs=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.22),M(0x3A3F46));
     legs.position.y=0.1;legs.castShadow=true;inner.add(legs);
     const body=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.36,0.28),
@@ -1661,7 +1805,7 @@ function buildUnits(){const G=R.unitG;
     const lampDot=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,6),
       M(0xFFF2C8,0xFFE7A0));
     lampDot.position.set(0,0.76,0.16);inner.add(lampDot);
-    const lamp=new THREE.SpotLight(0xFFE7B0,0.85,5.5,0.5,0.6,1.2);
+    const lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
     lamp.position.set(0,0.78,0.1);
     const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
     inner.add(lt);lamp.target=lt;inner.add(lamp);
@@ -1704,13 +1848,13 @@ function buildUnits(){const G=R.unitG;
 function lightFactor(name){const lv=sim.site.lightLevel(
   [Math.floor((ROOMS[name][0]+ROOMS[name][2])/2),
    Math.floor((ROOMS[name][1]+ROOMS[name][3])/2)],sim.round);
-  return lv==="lit"?1.0:(lv==="dim"?0.52:0.26)}
+  return lv==="lit"?1.0:(lv==="dim"?0.86:0.72)}
 function sceneSync(){if(!R||!sim)return;
   const site=sim.site;
   // room tint + warm room lights
   for(const[name,mesh]of Object.entries(R.roomFloors)){
     const f=name==="Van"?0.8:lightFactor(name);
-    const base=new THREE.Color(ROOMBASE[name]||0xA09884);
+    const base=new THREE.Color(ROOMBASE[name]||0xA09884).multiplyScalar(0.55);
     // cold rooms drift blue
     const t=site.temp[name]??13;
     if(t<=8)base.lerp(new THREE.Color(0x7FA0C8),0.35);
@@ -1720,14 +1864,20 @@ function sceneSync(){if(!R||!sim)return;
       sim.round>=(site.fixtureDead[name]||0);
     let L=R.roomLights[name];
     if(wants&&!L){const r=ROOMS[name];
-      L=new THREE.PointLight(0xE8C687,0.85,6.5,1.6);
+      L=new THREE.PointLight(0xDEB884,1.35,7.0,1.9);
       L.position.set((r[0]+r[2])/2+0.5,1.9,(r[1]+r[3])/2+0.5);
+      const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.075,10,8),
+        new THREE.MeshBasicMaterial({color:0xFFF0CC}));
+      L.add(bulb);
       R.lightG.add(L);R.roomLights[name]=L}
     else if(!wants&&L){R.lightG.remove(L);delete R.roomLights[name]}}
   // lantern lights
   if(!R.lanternLs)R.lanternLs=[];
   while(R.lanternLs.length<site.lanterns.length){
-    const L=new THREE.PointLight(0xDFA457,0.95,4.6,1.4);
+    const L=new THREE.PointLight(0xDFA457,1.9,5.6,1.5);
+    const flame=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),
+      new THREE.MeshBasicMaterial({color:0xFFD79A}));
+    L.add(flame);
     R.lightG.add(L);R.lanternLs.push(L)}
   R.lanternLs.forEach((L,i)=>{const p=site.lanterns[i];
     L.visible=!!p;if(p)L.position.set(p[0]+0.5,0.8,p[1]+0.5)});
@@ -1788,8 +1938,11 @@ function sceneSync(){if(!R||!sim)return;
       m.rotation.x=-Math.PI/2;
       m.position.set(r[0]+w/2,0.018,r[1]+d/2);G.add(m)}}
   if(tutMarker)flat(0.96,0.96,0xDFA457,0.35,tutMarker,0.04);
-  if(sim.site.furnaceOn){const fl=new THREE.PointLight(0xE07B3A,0.9,3.6);
-    fl.position.set(FURNACE[0]+0.5,0.7,FURNACE[1]+0.5);G.add(fl)}
+  if(sim.site.furnaceOn){const fl=new THREE.PointLight(0xE07B3A,2.2,5.0);
+    fl.position.set(FURNACE[0]+0.5,0.7,FURNACE[1]+0.5);G.add(fl);
+    const ember=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8),
+      new THREE.MeshBasicMaterial({color:0xFF9A4A}));
+    ember.position.copy(fl.position);G.add(ember)}
   // units
   for(const s of sim.squad){const u=R.units[s.name];if(!u)continue;
     const down=s.downed||s.dead;
@@ -1886,7 +2039,7 @@ function frame(now){requestAnimationFrame(frame);
     m.rotation.x=-Math.PI/2;
     m.position.set(r.pos[0]+0.5,0.06,r.pos[1]+0.5);
     R.fxG.add(m)}
-  R.renderer.render(R.scene,R.camera)}
+  renderPost(now)}
 // input -------------------------------------------------------------------
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2(),
   groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
