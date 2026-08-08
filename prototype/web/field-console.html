@@ -14,6 +14,19 @@ body{padding:0 0 40px}
   background:radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(150,20,10,.45) 100%);
   transition:opacity .6s}
 #vignette.prelude{opacity:.55}#vignette.hunt{opacity:.9}
+#banner{position:fixed;inset:0;display:flex;align-items:center;
+  justify-content:center;pointer-events:none;z-index:60;opacity:0}
+#banner span{font-family:var(--sans);font-weight:800;font-size:min(9vw,44px);
+  letter-spacing:.42em;padding-left:.42em;text-transform:uppercase;
+  color:var(--hazard);text-shadow:0 2px 18px rgba(0,0,0,.9)}
+#banner.show{animation:bannerIn 1.5s ease-out}
+@keyframes bannerIn{0%{opacity:0;transform:scale(1.06)}12%{opacity:1;transform:scale(1)}
+  70%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){#banner.show{animation:bannerFade 1.5s}
+  @keyframes bannerFade{0%{opacity:0}12%{opacity:1}70%{opacity:1}100%{opacity:0}}}
+#flash{position:fixed;inset:0;background:#EAF6EE;opacity:0;
+  pointer-events:none;z-index:55;transition:opacity 1.1s}
+#flash.on{opacity:.75;transition:opacity .06s}
 @media(prefers-reduced-motion:no-preference){
   #vignette.hunt{animation:breathe 1.6s ease-in-out infinite alternate}
   @keyframes breathe{from{opacity:.55}to{opacity:.95}}
@@ -22,6 +35,12 @@ body{padding:0 0 40px}
 .brand{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);
   padding-bottom:10px;margin-bottom:12px;flex-wrap:wrap}
 .brand h1{font-size:15px;letter-spacing:.22em;text-transform:uppercase;color:var(--hazard)}
+.brand{display:block;border-bottom:1px solid var(--line)}
+.wordmark{font-size:min(11vw,52px) !important;letter-spacing:.3em !important;
+  font-weight:800;margin:6px 0 2px;
+  text-shadow:0 0 26px rgba(223,164,87,.28)}
+.tagline{font-family:var(--mono);font-size:13px;color:var(--dim);margin-bottom:12px}
+.tagline b{color:var(--ecto);font-weight:600}
 .brand .co{font-family:var(--mono);font-size:11px;color:var(--dim)}
 .lbl{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
 button{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
@@ -169,10 +188,15 @@ body.locked{overflow:hidden}
 </style>
 
 <div id="vignette"></div>
+<div id="banner"><span id="bannerTx"></span></div>
+<div id="flash"></div>
 <div class="wrap">
   <div class="brand">
-    <h1>Bravo Team</h1>
-    <span class="co">Halloway &amp; Veck Paranormal Abatement, Ltd. — Field Console v0.2</span>
+    <div>
+      <div class="co" style="letter-spacing:.3em">HALLOWAY &amp; VECK PARANORMAL ABATEMENT, LTD.</div>
+      <h1 class="wordmark">BRAVO TEAM</h1>
+      <div class="tagline">Alpha finds them. <b>Bravo finishes them.</b></div>
+    </div>
   </div>
 
   <div id="briefing" class="screen on">
@@ -1389,6 +1413,21 @@ function makeSprite(txt,color,scale=0.66){
   const m=new THREE.SpriteMaterial({map:spriteTx(txt,color),transparent:true,
     depthWrite:false});
   const s=new THREE.Sprite(m);s.scale.set(scale,scale,1);return s}
+function glowTex(){if(TEX.glow)return TEX.glow;
+  const c=document.createElement("canvas");c.width=64;c.height=64;
+  const g=c.getContext("2d");
+  const r=g.createRadialGradient(32,32,2,32,32,30);
+  r.addColorStop(0,"rgba(255,255,255,.9)");r.addColorStop(1,"rgba(255,255,255,0)");
+  g.fillStyle=r;g.fillRect(0,0,64,64);
+  TEX.glow=new THREE.CanvasTexture(c);return TEX.glow}
+// per-ghost read (02 §6: silhouette identifies — surviving a Hunt IS evidence)
+const GHOSTVIS={hantu:{c:0x9FD8FF,s:1.0,tall:false},
+ demon:{c:0xE05848,s:1.3,tall:false},mare:{c:0x8A7FD6,s:0.95,tall:false},
+ jinn:{c:0xFFD070,s:1.0,tall:false},wraith:{c:0xBFD6CF,s:1.0,tall:true},
+ yurei:{c:0xF0F0E8,s:0.95,tall:true},poltergeist:{c:0xD6B37F,s:0.85,tall:false},
+ banshee:{c:0xD9E8F0,s:1.0,tall:true},revenant:{c:0xC87F5A,s:1.1,tall:false},
+ shade:{c:0x9AA4AD,s:0.9,tall:false},draugr:{c:0x7FB0D6,s:1.35,tall:false},
+ dybbuk:{c:0xA078DC,s:0.95,tall:false}};
 const ROOMBASE={Kitchen:0xB9A47E,Pantry:0xA89B7C,Mudroom:0xA39784,
   Bedroom:0xAF9A8E,Cellar:0x7E8A96,Hall:0xAB9F86,Bathroom:0x93A8A0,
   Living:0xB3A182,Foyer:0xB0A07E,Study:0xA5977F,Van:0x5A6B7C};
@@ -1421,7 +1460,9 @@ function init3D(){
     unitG=new THREE.Group(),fxG=new THREE.Group(),lightG=new THREE.Group();
   scene.add(staticG,dynG,unitG,fxG,lightG);
   const huntLight=new THREE.PointLight(0xC8564C,0,9);scene.add(huntLight);
-  const ghostLight=new THREE.PointLight(0x7FD6B4,0,6);scene.add(ghostLight);
+  const ghostLight=new THREE.PointLight(
+    (GHOSTVIS[sim.contract.trueGhost]||{c:0x7FD6B4}).c,0,6);
+  scene.add(ghostLight);
   R={renderer,scene,camera,staticG,dynG,unitG,fxG,lightG,huntLight,ghostLight,
     doors:{},roomFloors:{},roomLights:{},units:{},ghostM:null,alphaM:null,
     W,H,cam:(()=>{const f=Math.min(8.6,Math.max(4.6,6.4*(W/H)));return{cx:12,cz:10,half:f,tx:12,tz:10,th:f}})()};
@@ -1583,9 +1624,32 @@ function buildUnits(){const G=R.unitG;
   while(G.children.length)G.remove(G.children[0]);
   R.units={};
   for(const s of sim.squad){const grp=new THREE.Group();
-    const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.2,0.32,4,10),
-      new THREE.MeshLambertMaterial({color:CLSCOL[s.cls],transparent:true}));
-    body.castShadow=true;body.position.y=0.42;grp.add(body);
+    const inner=new THREE.Group();grp.add(inner);   // rotates to face movement
+    const mats=[];
+    const M=(c,e)=>{const m=new THREE.MeshLambertMaterial(
+      {color:c,transparent:true,emissive:e||0x000000});mats.push(m);return m};
+    const legs=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.22),M(0x3A3F46));
+    legs.position.y=0.1;legs.castShadow=true;inner.add(legs);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.36,0.28),
+      M(CLSCOL[s.cls]));
+    body.position.y=0.38;body.castShadow=true;inner.add(body);
+    const strap=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.07,0.3),M(0x2E333B));
+    strap.position.y=0.31;inner.add(strap);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),M(0xC9A98F));
+    head.position.y=0.66;head.castShadow=true;inner.add(head);
+    const hat=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.09,12),
+      M(CLSCOL[s.cls]));
+    hat.position.y=0.77;inner.add(hat);
+    const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.02,12),
+      M(CLSCOL[s.cls]));
+    brim.position.y=0.735;inner.add(brim);
+    const lampDot=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,6),
+      M(0xFFF2C8,0xFFE7A0));
+    lampDot.position.set(0,0.76,0.16);inner.add(lampDot);
+    const lamp=new THREE.SpotLight(0xFFE7B0,0.85,5.5,0.5,0.6,1.2);
+    lamp.position.set(0,0.78,0.1);
+    const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
+    inner.add(lt);lamp.target=lt;inner.add(lamp);
     const ring=new THREE.Mesh(new THREE.RingGeometry(0.3,0.4,24),
       new THREE.MeshBasicMaterial({color:0xF2E9D8,transparent:true,
         opacity:0.9,side:THREE.DoubleSide}));
@@ -1593,16 +1657,29 @@ function buildUnits(){const G=R.unitG;
     grp.add(ring);
     const tag=makeSprite(s.name[0],"#F0E9D8",0.62);tag.position.y=1.22;grp.add(tag);
     const burden=new THREE.Mesh(new THREE.CapsuleGeometry(0.13,0.3,4,8),
-      new THREE.MeshLambertMaterial({color:0x9A4B44}));
-    burden.rotation.z=Math.PI/2.3;burden.position.set(0.05,0.78,-0.12);
-    burden.castShadow=true;burden.visible=false;grp.add(burden);
+      M(0x9A4B44));
+    burden.rotation.z=Math.PI/2.3;burden.position.set(0.05,0.86,-0.14);
+    burden.castShadow=true;burden.visible=false;inner.add(burden);
     R.unitG.add(grp);
-    R.units[s.name]={grp,body,ring,tag,burden}}
-  // ghost
-  const gm=new THREE.Mesh(new THREE.SphereGeometry(0.32,20,16),
-    new THREE.MeshBasicMaterial({color:0x7FD6B4,transparent:true,opacity:0.7,
+    R.units[s.name]={grp,inner,mats,ring,tag,burden,dir:Math.PI,pop:0,
+      px:null,pz:null}}
+  // ghost: identity per 02 §6 — color, bulk, bearing
+  const gv=GHOSTVIS[sim.contract.trueGhost]||{c:0x7FD6B4,s:1,tall:false};
+  const gg=new THREE.Group();
+  const gm=new THREE.Mesh(new THREE.SphereGeometry(0.3,20,16),
+    new THREE.MeshBasicMaterial({color:gv.c,transparent:true,opacity:0.7,
       blending:THREE.AdditiveBlending,depthWrite:false}));
-  gm.visible=false;R.unitG.add(gm);R.ghostM=gm;
+  gm.scale.set(gv.s,gv.s*(gv.tall?1.8:1),gv.s);gg.add(gm);
+  const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),
+    color:gv.c,transparent:true,opacity:0.5,depthWrite:false,
+    blending:THREE.AdditiveBlending}));
+  halo.scale.set(1.7*gv.s,1.7*gv.s,1);gg.add(halo);
+  gg.userData.motes=[];
+  for(let i=0;i<4;i++){const m=new THREE.Sprite(new THREE.SpriteMaterial(
+    {map:glowTex(),color:gv.c,transparent:true,opacity:0.6,depthWrite:false,
+     blending:THREE.AdditiveBlending}));
+    m.scale.set(0.3,0.3,1);gg.add(m);gg.userData.motes.push(m)}
+  gg.visible=false;R.unitG.add(gg);R.ghostM=gg;
   // alpha victim: lying capsule
   const am=new THREE.Mesh(new THREE.CapsuleGeometry(0.17,0.34,4,8),
     new THREE.MeshLambertMaterial({color:0x9A4B44}));
@@ -1700,10 +1777,11 @@ function sceneSync(){if(!R||!sim)return;
     fl.position.set(FURNACE[0]+0.5,0.7,FURNACE[1]+0.5);G.add(fl)}
   // units
   for(const s of sim.squad){const u=R.units[s.name];if(!u)continue;
-    u.body.material.color.setHex(s.downed||s.dead?0x4A3F3D:CLSCOL[s.cls]);
-    u.body.material.opacity=s.hidden?0.35:1;
-    u.body.rotation.z=(s.downed||s.dead)?Math.PI/2:0;
-    u.body.position.y=(s.downed||s.dead)?0.2:0.42;
+    const down=s.downed||s.dead;
+    u.mats.forEach(m=>{m.opacity=s.hidden?0.35:1});
+    u.inner.rotation.x=down?Math.PI/2:0;
+    u.inner.position.y=down?0.15:0;
+    if(u.ring.visible!==(sel===s)&&sel===s)u.pop=1;
     u.ring.visible=sel===s;
     u.burden.visible=!!s.carrying;
     u.tag.material.opacity=s.hidden?0.4:1}
@@ -1733,15 +1811,26 @@ function frame(now){requestAnimationFrame(frame);
   tweens=tweens.filter(t=>now-t.t0<t.dur);
   for(const s of sim.squad){const u=R.units[s.name];if(!u)continue;
     const a=animPos(s.name,s.pos);
-    u.grp.position.set(a.x+0.5,0,a.y+0.5)}
+    u.grp.position.set(a.x+0.5,0,a.y+0.5);
+    if(u.px!=null){const dx=a.x-u.px,dz=a.y-u.pz;
+      if(Math.abs(dx)+Math.abs(dz)>0.004)u.dir=Math.atan2(dx,dz)}
+    u.px=a.x;u.pz=a.y;
+    let dd=u.dir-u.inner.rotation.y;
+    while(dd>Math.PI)dd-=2*Math.PI;while(dd<-Math.PI)dd+=2*Math.PI;
+    u.inner.rotation.y+=dd*(REDUCED?1:0.25);
+    if(u.pop>0.001){u.pop*=0.86;
+      const sc=1+u.pop*0.25;u.grp.scale.set(sc,sc,sc)}else u.grp.scale.set(1,1,1)}
   // ghost
   const gvis=(sim.hunt&&sim.squad.some(s=>s.mobile()&&!s.hidden&&
     sim.site.los(s.pos,sim.gpos)))||sim.hosted;
   const ga=animPos("ghost",sim.gpos);
   R.ghostM.visible=gvis;
-  R.ghostM.material.color.setHex(sim.hosted?0xA078DC:0x7FD6B4);
   R.ghostM.position.set(ga.x+0.5,
-    0.5+(REDUCED?0:Math.sin(now*0.003)*0.08),ga.y+0.5);
+    0.55+(REDUCED?0:Math.sin(now*0.003)*0.08),ga.y+0.5);
+  if(gvis&&!REDUCED)R.ghostM.userData.motes.forEach((m,i)=>{
+    const a2=now*0.0016+i*Math.PI/2;
+    m.position.set(Math.cos(a2)*0.55,0.15+Math.sin(now*0.002+i)*0.2,
+      Math.sin(a2)*0.55)});
   R.ghostLight.intensity=gvis?1.1:0;
   R.ghostLight.position.set(ga.x+0.5,0.9,ga.y+0.5);
   // hunt light breathes at the ghost
@@ -1760,6 +1849,16 @@ function frame(now){requestAnimationFrame(frame);
   if(R.dust&&!REDUCED){R.dust.position.y=Math.sin(now*0.00035)*0.1;
     R.dust.position.x=Math.sin(now*0.00021)*0.35}
   SND.update(now);
+  // floating world-space popups
+  R.pops=(R.pops||[]).filter(p=>{const age=(now-p.t0)/1100;
+    if(age>=1){R.fxG2&&R.fxG2.remove(p.spr);R.scene.remove(p.spr);return false}
+    p.spr.position.y=p.y0+age*0.85;
+    p.spr.material.opacity=age<0.15?age/0.15:1-(age-0.15)/0.85;return true});
+  // screen shake
+  if(R.shake>0.004){const s=R.shake;
+    R.camera.position.x+=(Math.random()-0.5)*s;
+    R.camera.position.y+=(Math.random()-0.5)*s*0.5;
+    R.shake*=0.86}else R.shake=0;
   // rings
   rings=rings.filter(r=>now-r.t0<900);
   while(R.fxG.children.length)R.fxG.remove(R.fxG.children[0]);
@@ -1813,6 +1912,19 @@ function tapAt(e){if(!sim||sim.over)return;
   const p=[Math.floor(hit.x),Math.floor(hit.z)];
   if(p[0]<0||p[1]<0||p[0]>=24||p[1]>=15)return;
   tapTile(p)}
+function popup(text,color,p,scale=1){if(!R)return;
+  const spr=makeWord(text,color);
+  spr.scale.set(2.1*scale,0.4*scale,1);
+  spr.position.set(p[0]+0.5,0.9,p[1]+0.5);
+  spr.material.opacity=0;
+  R.scene.add(spr);
+  (R.pops=R.pops||[]).push({spr,t0:performance.now(),y0:0.9})}
+function showBanner(text,color){const b=$("#banner");
+  $("#bannerTx").textContent=text;
+  $("#bannerTx").style.color=color||"var(--hazard)";
+  b.classList.remove("show");void b.offsetWidth;b.classList.add("show")}
+function flash(){const f=$("#flash");f.classList.add("on");
+  setTimeout(()=>f.classList.remove("on"),90)}
 function draw(){sceneSync()}
 // ================= procedural sound (WebAudio, no assets) =================
 const SND={ctx:null,muted:false,_u:0,_hb:0,
@@ -2067,13 +2179,29 @@ function renderActs(){const el=$("#acts");el.innerHTML="";
   const be=mk2("End turn",endTurn,{cls:"primary"});be.id="btnEnd"}
 function endTurn(){if(!sim||sim.over)return;
   sel=null;sprint=false;
+  const wasHunt=!!sim.hunt,wasPrelude=sim.prelude,wasBanished=sim.banished,
+    prevBanked=sim.banked;
   sim.advance();
   const mob=sim.squad.filter(s=>s.mobile());
   if(mob.length)camFollow([
     mob.reduce((a,s)=>a+s.pos[0],0)/mob.length,
     mob.reduce((a,s)=>a+s.pos[1],0)/mob.length]);
   sim.events.forEach((ev,i)=>setTimeout(()=>{
-    rings.push({pos:ev.pos,t0:performance.now(),kind:ev.kind})},i*220));
+    rings.push({pos:ev.pos,t0:performance.now(),kind:ev.kind});
+    if(ev.kind==="strike"){R.shake=Math.max(R.shake||0,0.5);
+      popup("STRIKE","#E06050",ev.pos)}
+    if(ev.kind==="backfire"){R.shake=Math.max(R.shake||0,0.7);
+      popup("BACKFIRE","#E06050",ev.pos,1.4)}},i*220));
+  if(sim.banished&&!wasBanished){flash();
+    showBanner("BANISHED","var(--ecto)");
+    popup("BANISHED","#7FD6B4",sim.contract.anchor,1.5);
+    camFollow(sim.contract.anchor)}
+  else if(sim.hunt&&!wasHunt){showBanner("HUNT","var(--blood)");
+    R.shake=Math.max(R.shake||0,0.35)}
+  else if(sim.prelude&&!wasPrelude)showBanner("PRELUDE","var(--hazard)");
+  if(sim.banked>prevBanked&&!sim.banished)
+    popup("CHANT "+sim.banked,"#DFA457",sim.contract.anchor);
+  if(sim.over&&sim.outcome==="failed")showBanner("SQUAD DOWN","var(--blood)");
   renderAll();logFlush();
   if(sim.over)setTimeout(showDebrief,600)}
 function renderChips(){const el=$("#chips");el.innerHTML="";
