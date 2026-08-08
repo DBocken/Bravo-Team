@@ -122,7 +122,7 @@ body.locked{overflow:hidden}
 #side button{padding:8px 6px;font-size:10px;letter-spacing:.1em;
   background:rgba(27,34,45,.9)}
 #side button.on{border-color:var(--hazard);color:var(--hazard)}
-#drawer{position:absolute;top:0;right:0;bottom:0;width:min(400px,94vw);z-index:26;
+#drawer{position:absolute;top:0;right:0;bottom:0;width:min(400px,94vw);z-index:45;
   background:rgba(16,21,29,.97);border-left:1px solid var(--line);
   transform:translateX(105%);transition:transform .22s;display:flex;
   flex-direction:column}
@@ -166,11 +166,21 @@ body.locked{overflow:hidden}
 #modal .body{font-family:var(--mono);font-size:12.5px;line-height:1.8;white-space:pre-wrap}
 #modal .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:flex-end}
 /* tutorial */
-#tutcard{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:90;
-  background:var(--panel);border:1px solid var(--hazard);border-radius:5px;
-  max-width:520px;width:calc(100vw - 24px);padding:12px 14px;display:none;
-  box-shadow:0 6px 30px rgba(0,0,0,.6)}
+/* coach card: sits ABOVE the action bar, never over it; taps pass through
+   the panel itself so the world stays reachable */
+#tutcard{position:fixed;left:8px;right:8px;
+  bottom:calc(var(--actsH,46px) + 14px);z-index:40;
+  background:rgba(20,25,33,.78);-webkit-backdrop-filter:blur(7px);
+  backdrop-filter:blur(7px);
+  border:1px solid var(--hazard);border-left-width:3px;border-radius:5px;
+  max-width:600px;margin-inline:auto;padding:10px 13px;display:none;
+  box-shadow:0 8px 32px rgba(0,0,0,.45);pointer-events:none}
 #tutcard.on{display:block}
+#tutcard .skip,#tutcard .row button{pointer-events:auto}
+/* while training runs: shrink the party column and mute the ticker so the
+   coach card covers nothing */
+body.tut #chips{bottom:calc(var(--actsH,46px) + var(--tutH,96px) + 24px)}
+body.tut #ticker{display:none}
 #tutcard .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
 #tutcard .step{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--hazard)}
 #tutcard .skip{font-size:11px;color:var(--dim);cursor:pointer;text-decoration:underline}
@@ -1321,6 +1331,11 @@ function syncAnim(){for(const s of sim.squad){const a=animPos(s.name,s.pos);
   const g=animPos("ghost",sim.gpos);
   if(!tweens.some(t=>t.name==="ghost")&&(g.x!==sim.gpos[0]||g.y!==sim.gpos[1]))
     startWalk("ghost",[[g.x,g.y],sim.gpos],60)}
+function layoutHUD(){const a=$("#acts"),t=$("#tutcard"),
+  r=document.documentElement;
+  if(a)r.style.setProperty("--actsH",a.offsetHeight+"px");
+  r.style.setProperty("--tutH",
+    (t&&t.classList.contains("on")?t.offsetHeight:0)+"px")}
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("on");
   clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),2200)}
 
@@ -2240,7 +2255,7 @@ function renderRail(){$("#round").textContent=sim.round;
 function renderReport(){$("#report").textContent=sim.contract.report.join("\n")}
 function renderAll(){renderRail();renderChips();renderActs();renderReport();
   if($("#journal").classList.contains("on"))renderJournal();
-  syncAnim();tutCheck();sceneSync()}
+  syncAnim();tutCheck();layoutHUD();sceneSync()}
 function showDebrief(){const[total,lines]=sim.debrief();
   let body="OUTCOME: "+String(sim.outcome).toUpperCase()+"\n\n"+lines.join("\n")+
     "\n\nPAYOUT: "+total;
@@ -2306,6 +2321,7 @@ const TUTS=[
 ];
 function tutStart(){$("#selDiff").value="trainee";$("#selSeed").value=3;
   newContract("hantu");deploy();
+  document.body.classList.add("tut");
   tut={i:0};tutShow()}
 function tutShow(){const t=TUTS[tut.i];if(!t){tutEnd();return}
   $("#tutcard").classList.add("on");
@@ -2319,21 +2335,23 @@ function tutShow(){const t=TUTS[tut.i];if(!t){tutEnd();return}
   if(t.next||!t.done){const b=document.createElement("button");
     b.className="primary";b.textContent=tut.i===TUTS.length-1?"Finish":"Got it";
     b.onclick=()=>{tut.i++;tutShow()};row.appendChild(b)}
+  layoutHUD();requestAnimationFrame(layoutHUD);
   sceneSync()}
 function tutCheck(){if(!tut||!sim)return;
   const t=TUTS[tut.i];if(!t)return;
   if(sim.over&&tut.i<TUTS.length-1){tut.i=TUTS.length-1;tutShow();return}
   if(t.done&&t.done()){tut.i++;tutShow()}}
 function tutEnd(){tut=null;tutMarker=null;
-  $("#tutcard").classList.remove("on");
+  document.body.classList.remove("tut");
+  $("#tutcard").classList.remove("on");layoutHUD();
   document.querySelectorAll(".tut-glow").forEach(e=>e.classList.remove("tut-glow"));
   if(R&&sim)sceneSync()}
 $("#btnMute").onclick=()=>{SND.init();
   $("#btnMute").textContent=SND.toggle()?"SND OFF":"SND ON"};
 $("#tutSkip").onclick=tutEnd;
 $("#btnTut").onclick=tutStart;
-addEventListener("resize",()=>{if(R&&sim&&
-  $("#play").classList.contains("on"))resize3D()});
+addEventListener("resize",()=>{layoutHUD();
+  if(R&&sim&&$("#play").classList.contains("on"))resize3D()});
 window._dbg={get sim(){return sim},tap:tapTile,end:endTurn,sel:(n)=>{sel=sim.spec(n);renderAll()}};
 newContract();
 })()}
