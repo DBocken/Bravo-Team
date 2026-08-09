@@ -1435,13 +1435,23 @@ let R=null;           // renderer bundle
 const TEX={},GEO={},MAT={};
 const SRC={};   // name -> source canvas (for normal-map derivation)
 function anisotropy(t){if(R&&R.renderer&&t)
-    t.anisotropy=Math.min(8,R.renderer.capabilities.getMaxAnisotropy());
+    t.anisotropy=R.renderer.capabilities.getMaxAnisotropy();
   return t}
+// Canvas pixels are authored in sRGB. Left undeclared, three feeds them to
+// the lighting maths as if they were linear and the composite gammas them a
+// second time — every surface lifts toward mid-grey and the whole frame
+// reads as washed out. Colour maps get decoded; normal maps must NOT.
+const SRGB=THREE.sRGBEncoding||3001;
+function asColor(t){t.encoding=SRGB;t.needsUpdate=true;return t}
+// Drawn in a 128 grid but rasterised at 256 so the pattern is unchanged and
+// simply carries twice the detail — the surfaces stop smearing under zoom.
+const TEXSS=2;
 function tex(name,fn,rw=1,rh=1){if(TEX[name])return TEX[name];
-  const c=document.createElement("canvas");c.width=128;c.height=128;
-  fn(c.getContext("2d"),128,128);
+  const c=document.createElement("canvas");c.width=c.height=128*TEXSS;
+  const g=c.getContext("2d");g.scale(TEXSS,TEXSS);
+  fn(g,128,128);
   SRC[name]=c;
-  const t=new THREE.CanvasTexture(c);
+  const t=asColor(new THREE.CanvasTexture(c));
   t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rw,rh);
   TEX[name]=t;return t}
 // Sobel height->normal: gives every procedural surface real relief under the
@@ -1559,17 +1569,19 @@ function saltTex(scoured){return tex(scoured?"salt2":"salt",(g,w,h)=>{
   g.clearRect(0,0,w,h);g.fillStyle=scoured?"rgba(190,185,170,.4)":"#efe9da";
   for(let x=4;x<w;x+=12)g.fillRect(x,h/2-4,scoured?4:8,8)})}
 function spriteTx(txt,color){const k="sp:"+txt+color;if(TEX[k])return TEX[k];
-  const c=document.createElement("canvas");c.width=64;c.height=64;
-  const g=c.getContext("2d");g.font="bold 44px Arial";g.textAlign="center";
+  const c=document.createElement("canvas");c.width=c.height=128;
+  const g=c.getContext("2d");g.scale(2,2);
+  g.font="bold 44px Arial";g.textAlign="center";
   g.textBaseline="middle";g.shadowColor="#000";g.shadowBlur=8;
   g.fillStyle=color;g.fillText(txt,32,34);
-  const t=new THREE.CanvasTexture(c);TEX[k]=t;return t}
+  const t=asColor(new THREE.CanvasTexture(c));TEX[k]=t;return t}
 function makeWord(txt,color){const k="wd:"+txt+color;
-  if(!TEX[k]){const c=document.createElement("canvas");c.width=256;c.height=48;
-    const g=c.getContext("2d");g.font="bold 30px Arial";g.textAlign="center";
+  if(!TEX[k]){const c=document.createElement("canvas");c.width=512;c.height=96;
+    const g=c.getContext("2d");g.scale(2,2);
+    g.font="bold 30px Arial";g.textAlign="center";
     g.textBaseline="middle";g.shadowColor="#000";g.shadowBlur=7;
     g.fillStyle=color;g.fillText(txt,128,26);
-    TEX[k]=new THREE.CanvasTexture(c)}
+    TEX[k]=asColor(new THREE.CanvasTexture(c))}
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX[k],
     transparent:true,depthWrite:false}));
   s.scale.set(2.1,0.4,1);return s}
@@ -1592,7 +1604,7 @@ function nameTagTx(name,color){const k="nt:"+name+color;if(TEX[k])return TEX[k];
   g.textAlign="center";g.textBaseline="middle";
   g.shadowColor="#000";g.shadowBlur=5;
   g.fillStyle="#EFE8D9";g.fillText(name.toUpperCase(),x0+w/2+6,y0+h/2+1);
-  const t=new THREE.CanvasTexture(c);TEX[k]=t;return t}
+  const t=asColor(new THREE.CanvasTexture(c));TEX[k]=t;return t}
 function makeNameTag(name,color){
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:nameTagTx(name,color),
     transparent:true,depthWrite:false}));
@@ -1608,9 +1620,9 @@ function wordPlane(txt){const k="wp:"+txt;
     g.textBaseline="middle";g.fillStyle="#EFE8D9";
     // manual letterspacing for the surveyor's-stencil look
     const sp=txt.split("").join("  ");
-    g.fillText(sp,128,34);TEX[k]=new THREE.CanvasTexture(c)}
+    g.fillText(sp,128,34);TEX[k]=asColor(new THREE.CanvasTexture(c))}
   const m=new THREE.Mesh(new THREE.PlaneGeometry(2.3,0.575),
-    new THREE.MeshBasicMaterial({map:TEX[k],transparent:true,opacity:0.15,
+    new THREE.MeshBasicMaterial({map:TEX[k],transparent:true,opacity:0.085,
       depthWrite:false}));
   m.rotation.x=-Math.PI/2;return m}
 // A gobo for the headlamps: real torches never throw a clean disc.
@@ -1626,7 +1638,7 @@ function cookieTex(){if(TEX.cookie)return TEX.cookie;
     g.fillStyle="rgba(0,0,0,"+(0.05+Math.random()*0.13)+")";
     g.beginPath();g.arc(20+Math.random()*88,20+Math.random()*88,
       3+Math.random()*16,0,7);g.fill()}
-  const t=new THREE.CanvasTexture(c);TEX.cookie=t;return t}
+  const t=asColor(new THREE.CanvasTexture(c));TEX.cookie=t;return t}
 // a two-tone sky/ground gradient so gloss has something to reflect
 function envTex(){if(TEX.env)return TEX.env;
   const c=document.createElement("canvas");c.width=c.height=64;
@@ -1635,7 +1647,7 @@ function envTex(){if(TEX.env)return TEX.env;
   lg.addColorStop(0,"#39485C");lg.addColorStop(0.5,"#1A2028");
   lg.addColorStop(1,"#0E1216");
   g.fillStyle=lg;g.fillRect(0,0,64,64);
-  const t=new THREE.CanvasTexture(c);
+  const t=asColor(new THREE.CanvasTexture(c));
   t.mapping=THREE.EquirectangularReflectionMapping;
   TEX.env=t;return t}
 function glowTex(){if(TEX.glow)return TEX.glow;
@@ -1644,7 +1656,7 @@ function glowTex(){if(TEX.glow)return TEX.glow;
   const r=g.createRadialGradient(32,32,2,32,32,30);
   r.addColorStop(0,"rgba(255,255,255,.9)");r.addColorStop(1,"rgba(255,255,255,0)");
   g.fillStyle=r;g.fillRect(0,0,64,64);
-  TEX.glow=new THREE.CanvasTexture(c);return TEX.glow}
+  TEX.glow=asColor(new THREE.CanvasTexture(c));return TEX.glow}
 // per-ghost read (02 §6: silhouette identifies — surviving a Hunt IS evidence)
 const GHOSTVIS={hantu:{c:0x9FD8FF,s:1.0,tall:false},
  demon:{c:0xE05848,s:1.3,tall:false},mare:{c:0x8A7FD6,s:0.95,tall:false},
@@ -1680,7 +1692,8 @@ const FRAG_BLUR=`uniform sampler2D tDiffuse;uniform vec2 dir;varying vec2 vUv;
   s+=texture2D(tDiffuse,vUv+dir*4.0).rgb*0.0162;
   gl_FragColor=vec4(s,1.0);}`;
 const FRAG_COMP=`uniform sampler2D tScene,tBloom,tSoft;
- uniform float uBloom,uTime,uDread,uHunt,uVig,uExposure,uDof,uFocus,uBand;
+ uniform float uBloom,uTime,uDread,uHunt,uVig,uExposure,uDof,uFocus,uBand,uSharp;
+ uniform vec2 uTexel;
  varying vec2 vUv;
  vec3 aces(vec3 x){return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0);}
  void main(){vec2 d=vUv-0.5;
@@ -1689,7 +1702,17 @@ const FRAG_COMP=`uniform sampler2D tScene,tBloom,tSoft;
   col.r=texture2D(tScene,vUv+d*ca).r;
   col.g=texture2D(tScene,vUv).g;
   col.b=texture2D(tScene,vUv-d*ca).b;
-  float band=smoothstep(uBand,uBand+0.30,abs(vUv.y-uFocus));
+  // Unsharp mask straight off the scene buffer: a four-tap cross costs four
+  // reads in this pass instead of two extra full-screen blur passes, and the
+  // high-pass stays at native resolution so fine grain actually survives.
+  vec3 lo=(texture2D(tScene,vUv+vec2(uTexel.x,0.0)).rgb
+          +texture2D(tScene,vUv-vec2(uTexel.x,0.0)).rgb
+          +texture2D(tScene,vUv+vec2(0.0,uTexel.y)).rgb
+          +texture2D(tScene,vUv-vec2(0.0,uTexel.y)).rgb)*0.25;
+  col+=(col-lo)*uSharp;
+  // Tilt-shift only at the very edges of the frame, and gently — the diorama
+  // hint must never cost legibility of the board.
+  float band=smoothstep(uBand,uBand+0.26,abs(vUv.y-uFocus));
   col=mix(col,texture2D(tSoft,vUv).rgb,band*uDof);
   col+=texture2D(tBloom,vUv).rgb*uBloom;
   float lum=dot(col,vec3(0.2126,0.7152,0.0722));
@@ -1700,11 +1723,17 @@ const FRAG_COMP=`uniform sampler2D tScene,tBloom,tSoft;
   col*=clamp(v,0.0,1.0);
   col=aces(col*uExposure);
   gl_FragColor=vec4(pow(max(col,0.0),vec3(1.0/2.2)),1.0);}`;
-function makeRT(w,h,depth){return new THREE.WebGLRenderTarget(
-  Math.max(2,Math.floor(w)),Math.max(2,Math.floor(h)),
-  {minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
+function makeRT(w,h,depth,samples){
+  const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
    type:THREE.UnsignedByteType,format:THREE.RGBAFormat,
-   depthBuffer:!!depth,stencilBuffer:false})}
+   depthBuffer:!!depth,stencilBuffer:false};
+  // The canvas' own antialias flag is dead weight once we render into a
+  // target — MSAA has to be asked for on the target itself, and only WebGL2
+  // can serve it. Without this every edge in the game is a staircase.
+  if(samples&&R&&R.renderer&&R.renderer.capabilities.isWebGL2)o.samples=samples;
+  const rt=new THREE.WebGLRenderTarget(
+    Math.max(2,Math.floor(w)),Math.max(2,Math.floor(h)),o);
+  return rt}
 function fsPass(frag,uniforms){
   const mat=new THREE.ShaderMaterial({vertexShader:VERT,fragmentShader:frag,
     uniforms,depthTest:false,depthWrite:false});
@@ -1715,30 +1744,42 @@ function buildPost(W,H){
   const px=R&&R.px!=null?R.px:Math.min(devicePixelRatio||1,2);
   const w=Math.floor(W*px),h=Math.floor(H*px);
   const bw=Math.max(2,Math.floor(w/2)),bh=Math.max(2,Math.floor(h/2));
+  // the soft buffer now only feeds the tilt-shift edge, which is blurred by
+  // definition — half resolution there is free quality
+  const sw=bw,sh=bh;
+  // at devicePixelRatio 2 the frame is already supersampled, so 2 samples
+  // clean the remaining edges without paying for 4
   const P={cam:new THREE.OrthographicCamera(-1,1,1,-1,0,1),
-    rtScene:makeRT(w,h,true),rtA:makeRT(bw,bh),rtB:makeRT(bw,bh),
-    rtD:makeRT(bw,bh),rtE:makeRT(bw,bh),bw,bh};
+    rtScene:makeRT(w,h,true,px>=2?2:4),rtA:makeRT(bw,bh),rtB:makeRT(bw,bh),
+    rtD:makeRT(sw,sh),rtE:makeRT(sw,sh),bw,bh,sw,sh};
   P.bright=fsPass(FRAG_BRIGHT,{tDiffuse:{value:P.rtScene.texture},
-    threshold:{value:0.80},knee:{value:0.28}});
+    threshold:{value:0.86},knee:{value:0.22}});
   P.blur=fsPass(FRAG_BLUR,{tDiffuse:{value:null},dir:{value:new THREE.Vector2()}});
   P.copy=fsPass(FRAG_BLUR,{tDiffuse:{value:null},
     dir:{value:new THREE.Vector2()}});
   P.comp=fsPass(FRAG_COMP,{tScene:{value:P.rtScene.texture},
     tBloom:{value:P.rtB.texture},tSoft:{value:P.rtD.texture},
-    uBloom:{value:0.62},uTime:{value:0},
-    uDread:{value:0},uHunt:{value:0},uVig:{value:0.62},uExposure:{value:0.97},
-    uDof:{value:0.9},uFocus:{value:0.52},uBand:{value:0.17}});
+    uBloom:{value:0.46},uTime:{value:0},
+    uDread:{value:0},uHunt:{value:0},uVig:{value:0.62},uExposure:{value:1.62},
+    uDof:{value:0.40},uFocus:{value:0.52},uBand:{value:0.34},
+    uSharp:{value:0.58},uTexel:{value:new THREE.Vector2(1.5/w,1.5/h)}});
   return P}
+// Give up effects before pixels: a soft full-res frame reads worse than a
+// crisp one with less bloom, so resolution is the last thing to go.
 function degrade(){if(R.q<=0)return;
-  if(R.q===2){R.px=1;R.renderer.setPixelRatio(1);
-    const old=R.post;R.post=buildPost(R.W,R.H);
-    old.rtScene.dispose();old.rtA.dispose();old.rtB.dispose()}
-  else{R.renderer.shadowMap.enabled=false;
+  const u=R.post.comp.mat.uniforms;
+  if(R.q===3){u.uDof.value=0;u.uSharp.value=0.30}
+  else if(R.q===2){R.renderer.shadowMap.enabled=false;
     R.scene.traverse(o=>{if(o.material)o.material.needsUpdate=true})}
+  else{R.px=1;R.renderer.setPixelRatio(1);
+    const old=R.post;R.post=buildPost(R.W,R.H);
+    R.post.comp.mat.uniforms.uDof.value=0;
+    old.rtScene.dispose();old.rtA.dispose();old.rtB.dispose();
+    old.rtD.dispose();old.rtE.dispose()}
   R.q--;R.fr=0;R.fsum=0}
 function renderPost(now){const P=R.post,rn=R.renderer;
   if(R.flast){R.fsum+=now-R.flast;R.fr++;
-    if(R.fr>=60){if(R.fsum/R.fr>30)degrade();R.fr=0;R.fsum=0}}
+    if(R.fr>=90){if(R.fsum/R.fr>42)degrade();R.fr=0;R.fsum=0}}
   R.flast=now;
   rn.setRenderTarget(P.rtScene);rn.clear();rn.render(R.scene,R.camera);
   // bright pass
@@ -1752,16 +1793,15 @@ function renderPost(now){const P=R.post,rn=R.renderer;
     P.blur.mat.uniforms.tDiffuse.value=P.rtB.texture;
     P.blur.mat.uniforms.dir.value.set(0,(1.3+i*2.4)/P.bh);
     rn.setRenderTarget(P.rtA);rn.render(P.blur.scene,P.cam)}
-  if(R.q>0){                       // plain soft copy for the tilt-shift band
+  const u=P.comp.mat.uniforms;
+  if(u.uDof.value>0){          // soft copy only feeds the tilt-shift edge
     P.copy.mat.uniforms.tDiffuse.value=P.rtScene.texture;
-    P.copy.mat.uniforms.dir.value.set(2.0/P.bw,0);
+    P.copy.mat.uniforms.dir.value.set(1.6/P.sw,0);
     rn.setRenderTarget(P.rtE);rn.render(P.copy.scene,P.cam);
     P.copy.mat.uniforms.tDiffuse.value=P.rtE.texture;
-    P.copy.mat.uniforms.dir.value.set(0,2.0/P.bh);
+    P.copy.mat.uniforms.dir.value.set(0,1.6/P.sh);
     rn.setRenderTarget(P.rtD);rn.render(P.copy.scene,P.cam)}
-  const u=P.comp.mat.uniforms;
   u.tBloom.value=P.rtA.texture;
-  u.uDof.value=R.q>0?0.9:0.0;
   u.uTime.value=now*0.001;
   u.uDread.value=sim?Math.min(1,sim.dread/100):0;
   const hunt=sim&&sim.collapse?0.8:(sim&&sim.hunt?1:(sim&&sim.prelude?0.55:0));
@@ -1771,7 +1811,13 @@ function renderPost(now){const P=R.post,rn=R.renderer;
 function init3D(){
   const host=$("#gl");host.innerHTML="";
   const W=host.clientWidth||innerWidth,H=host.clientHeight||innerHeight;
-  const renderer=new THREE.WebGLRenderer({antialias:true});
+  // Colour management on: material colours are authored in sRGB just like the
+  // canvas textures, and both are now decoded once on the way in and encoded
+  // once on the way out, instead of being gamma'd twice into flat grey.
+  if(THREE.ColorManagement)THREE.ColorManagement.legacyMode=false;
+  // antialias is meaningless on the canvas when every frame goes through a
+  // render target — MSAA is requested on rtScene instead
+  const renderer=new THREE.WebGLRenderer({antialias:false});
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
   renderer.setSize(W,H);
   renderer.shadowMap.enabled=true;
@@ -1795,9 +1841,9 @@ function init3D(){
   scene.fog=new THREE.FogExp2(0x080B10,0.021);
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,0.1,120);
   scene.environment=envTex();
-  scene.add(new THREE.AmbientLight(0x223040,0.34));
-  scene.add(new THREE.HemisphereLight(0x46617E,0x1A1512,0.16));
-  const moon=new THREE.DirectionalLight(0x8FA8C8,0.30);
+  scene.add(new THREE.AmbientLight(0x223040,0.98));
+  scene.add(new THREE.HemisphereLight(0x46617E,0x1A1512,0.46));
+  const moon=new THREE.DirectionalLight(0x8FA8C8,0.86);
   moon.position.set(30,32,-10);moon.castShadow=true;
   moon.shadow.mapSize.set(W>700?2048:1024,W>700?2048:1024);
   moon.shadow.bias=-0.0012;
@@ -1808,7 +1854,7 @@ function init3D(){
   const staticG=new THREE.Group(),dynG=new THREE.Group(),
     unitG=new THREE.Group(),fxG=new THREE.Group(),lightG=new THREE.Group();
   scene.add(staticG,dynG,unitG,fxG,lightG);
-  const huntLight=new THREE.PointLight(0xC8564C,0,9);scene.add(huntLight);
+  const huntLight=new THREE.PointLight(0xC8564C,0,9);huntLight.decay=1.4;scene.add(huntLight);
   const ghostLight=new THREE.PointLight(
     (GHOSTVIS[sim.contract.trueGhost]||{c:0x7FD6B4}).c,0,6);
   scene.add(ghostLight);
@@ -1817,7 +1863,7 @@ function init3D(){
     W,H,cam:(()=>{const f=Math.min(8.6,Math.max(4.6,6.4*(W/H)));return{cx:12,cz:12,half:f,tx:12,tz:12,th:f}})()};
   R.seen=null;R.vis=null;
   R.px=Math.min(devicePixelRatio||1,2);
-  R.q=2;R.fr=0;R.fsum=0;R.flast=0;   // adaptive quality state
+  R.q=3;R.fr=0;R.fsum=0;R.flast=0;   // adaptive quality state
   R.post=buildPost(W,H);
   buildStatic();
   buildUnits();
@@ -1833,14 +1879,16 @@ function resize3D(){if(!R)return;const host=$("#gl");
   R.renderer.setSize(R.W,R.H);
   const old=R.post;
   R.post=buildPost(R.W,R.H);
-  if(old){old.rtScene.dispose();old.rtA.dispose();old.rtB.dispose()}}
+  if(R.q<3)R.post.comp.mat.uniforms.uDof.value=0;   // keep the degraded tier
+  if(old){old.rtScene.dispose();old.rtA.dispose();old.rtB.dispose();
+    old.rtD.dispose();old.rtE.dispose()}}
 function box(w,h,d,color,map,opts={}){
   const g=new THREE.BoxGeometry(w,h,d);
   const base={color,roughness:0.9,metalness:0.0};
   if(map){base.map=map;
     const nm=Object.keys(TEX).find(k=>TEX[k]===map);
     const n=nm?normalOf(nm):null;
-    if(n){base.normalMap=n;base.normalScale=new THREE.Vector2(0.55,0.55)}}
+    if(n){base.normalMap=n;base.normalScale=new THREE.Vector2(0.85,0.85)}}
   const m=new THREE.MeshStandardMaterial(Object.assign(base,opts));
   const mesh=new THREE.Mesh(g,m);mesh.castShadow=true;mesh.receiveShadow=true;
   return mesh}
@@ -2125,7 +2173,7 @@ function makeWorker(overall,hat,withLamp){
   inner.add(mk(new THREE.SphereGeometry(0.033,8,6),
     M(withLamp?0xFFF2C8:0x6A6256,withLamp?0xFFE7A0:0),0,0.80,0.145));
   let lamp=null;
-  if(withLamp){lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
+  if(withLamp){lamp=new THREE.SpotLight(0xFFE7B0,6.0,7.4,0.55,0.55,1.1);
     // NO cookie texture here: SpotLight.map is fresh in r147 and fails to
     // link on a range of real GPU drivers, blacking out every lit material.
     // The readable cone comes from the ground-projected beam shader anyway.
@@ -2133,16 +2181,22 @@ function makeWorker(overall,hat,withLamp){
     const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
     inner.add(lt);lamp.target=lt;inner.add(lamp)}
   return {grp,inner,mats,lamp,legs,arms,body}}
+// One texel per tile stretched over the whole map made the dark edge a
+// tile-wide gradient — soft blobs that read as a smeared image. The mask is
+// built at FOGSS subtexels per tile and the ramp is squeezed with a smooth
+// curve, so the darkness now hugs what you can actually see.
+const FOGSS=4;
 function buildFog(){
-  const W=sim.site.w,H=sim.site.h,data=new Uint8Array(W*H*4);
+  const W=sim.site.w*FOGSS,H=sim.site.h*FOGSS,data=new Uint8Array(W*H*4);
   for(let i=0;i<W*H;i++){data[i*4]=5;data[i*4+1]=7;data[i*4+2]=13;
     data[i*4+3]=255}
   const tex=new THREE.DataTexture(data,W,H,THREE.RGBAFormat);
   tex.minFilter=tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;
-  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H),
+  const tw=sim.site.w,th=sim.site.h;
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(tw,th),
     new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,
       fog:false}));
-  mesh.rotation.x=-Math.PI/2;mesh.position.set(W/2,0.045,H/2);
+  mesh.rotation.x=-Math.PI/2;mesh.position.set(tw/2,0.045,th/2);
   mesh.renderOrder=6;
   return {mesh,tex,data}}
 function computeVision(){
@@ -2178,10 +2232,20 @@ function updateFog(vis){const {data,tex}=R.fog,W=sim.site.w,H=sim.site.h;
   // cone collapses to nothing. Hand the map back instead of cutting to black:
   // remembered ground lifts, and even unwalked ground shows as a faint plan.
   const rest=sim.over?0.62:0.30,unknown=sim.over?0.10:0;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const i=y*W+x;
-    const v=vis[i]>0?vis[i]:(R.seen[i]?rest:unknown);
-    data[((H-1-y)*W+x)*4+3]=Math.round((1-Math.max(0,Math.min(1,v)))*255)}
+  const lvl=(x,y)=>{if(x<0||y<0||x>=W||y>=H)return unknown;
+    const i=y*W+x;return vis[i]>0?vis[i]:(R.seen[i]?rest:unknown)};
+  const FW=W*FOGSS,FH=H*FOGSS,inv=1/FOGSS;
+  for(let sy=0;sy<FH;sy++){
+    // sample the tile grid at subtexel centres, bilinear between tiles
+    const wy=(sy+0.5)*inv-0.5,y0=Math.floor(wy),fy=wy-y0;
+    for(let sx=0;sx<FW;sx++){
+      const wx=(sx+0.5)*inv-0.5,x0=Math.floor(wx),fx=wx-x0;
+      const a=lvl(x0,y0),b=lvl(x0+1,y0),c=lvl(x0,y0+1),d=lvl(x0+1,y0+1);
+      let v=(a*(1-fx)+b*fx)*(1-fy)+(c*(1-fx)+d*fx)*fy;
+      // squeeze the ramp: a tile-wide linear fade reads as smear, an S-curve
+      // reads as an edge the light stops at
+      v=v<=0?0:(v>=1?1:v*v*(3-2*v));
+      data[((FH-1-sy)*FW+sx)*4+3]=Math.round((1-v)*255)}}
   tex.needsUpdate=true}
 function seenAt(p){return R.seen&&R.seen[p[1]*sim.site.w+p[0]]}
 // The beam you actually read from above: a ground-projected cone, clipped by
@@ -2280,13 +2344,13 @@ function sceneSync(){if(!R||!sim)return;
     const i=p[1]*VW+p[0],now=vis[i]>0.05,ever=!!R.seen[i];
     for(const m of R.tileObjs[k]){m.visible=ever;
       if(ever&&m.userData.base&&m.material&&m.material.color)
-        m.material.color.copy(m.userData.base).multiplyScalar(now?1:0.55)}}
+        m.material.color.copy(m.userData.base).multiplyScalar(now?1:0.62)}}
   for(const dk in R.doors){const p=dk.split(",").map(Number);
     R.doors[dk].hinge.visible=!!R.seen[p[1]*VW+p[0]]}
   // room tint + warm room lights
   for(const[name,mesh]of Object.entries(R.roomFloors)){
     const f=name==="Van"?0.8:lightFactor(name);
-    const base=new THREE.Color(ROOMBASE[name]||0xA09884).multiplyScalar(0.55);
+    const base=new THREE.Color(ROOMBASE[name]||0xA09884).multiplyScalar(0.88);
     // cold rooms drift blue
     const t=site.temp[name]??13;
     if(t<=8)base.lerp(new THREE.Color(0x7FA0C8),0.35);
@@ -2296,7 +2360,7 @@ function sceneSync(){if(!R||!sim)return;
       sim.round>=(site.fixtureDead[name]||0);
     let L=R.roomLights[name];
     if(wants&&!L){const r=ROOMS[name];
-      L=new THREE.PointLight(0xDEB884,1.35,7.0,1.9);
+      L=new THREE.PointLight(0xDEB884,3.7,7.4,1.7);
       L.position.set((r[0]+r[2])/2+0.5,1.9,(r[1]+r[3])/2+0.5);
       const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.075,10,8),
         new THREE.MeshBasicMaterial({color:0xFFF0CC}));
@@ -2306,7 +2370,7 @@ function sceneSync(){if(!R||!sim)return;
   // lantern lights
   if(!R.lanternLs)R.lanternLs=[];
   while(R.lanternLs.length<site.lanterns.length){
-    const L=new THREE.PointLight(0xDFA457,1.9,5.6,1.5);
+    const L=new THREE.PointLight(0xDFA457,5.2,5.8,1.4);
     const flame=new THREE.Mesh(new THREE.SphereGeometry(0.06,8,6),
       new THREE.MeshBasicMaterial({color:0xFFD79A}));
     L.add(flame);
@@ -2400,7 +2464,7 @@ function sceneSync(){if(!R||!sim)return;
       m.rotation.x=-Math.PI/2;
       m.position.set(r[0]+w/2,0.018,r[1]+d/2);G.add(m)}}
   if(tutMarker)flat(0.96,0.96,0xDFA457,0.35,tutMarker,0.04);
-  if(sim.site.furnaceOn){const fl=new THREE.PointLight(0xE07B3A,2.2,5.0);
+  if(sim.site.furnaceOn){const fl=new THREE.PointLight(0xE07B3A,6.0,5.4);
     fl.position.set(FURNACE[0]+0.5,0.7,FURNACE[1]+0.5);G.add(fl);
     const ember=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8),
       new THREE.MeshBasicMaterial({color:0xFF9A4A}));
@@ -2491,12 +2555,12 @@ function frameBody(now){
     const a2=now*0.0016+i*Math.PI/2;
     m.position.set(Math.cos(a2)*0.55,0.15+Math.sin(now*0.002+i)*0.2,
       Math.sin(a2)*0.55)});
-  R.ghostLight.intensity=gvis?1.1:0;
+  R.ghostLight.intensity=gvis?3.0:0;
   R.ghostLight.position.set(ga.x+0.5,0.9,ga.y+0.5);
   // hunt light breathes at the ghost
-  if(sim.hunt&&!REDUCED){R.huntLight.intensity=0.8+Math.sin(now*0.006)*0.5;
+  if(sim.hunt&&!REDUCED){R.huntLight.intensity=2.2+Math.sin(now*0.006)*1.3;
     R.huntLight.position.set(ga.x+0.5,1.2,ga.y+0.5)}
-  else R.huntLight.intensity=sim.hunt?1:0;
+  else R.huntLight.intensity=sim.hunt?2.6:0;
   // doors ease open/closed
   for(const d of Object.values(R.doors)){
     d.open=d.open??0;const tg=d.target??0;
@@ -2518,7 +2582,7 @@ function frameBody(now){
       uf.uInt.value=(R.q>0?0.62:0.5)*(sel===s?1.15:0.9)}}
   if(!REDUCED)for(const nm in R.roomLights){const L=R.roomLights[nm];
     const f=Math.sin(now*0.011+nm.length*2.1)*Math.sin(now*0.0037+nm.length);
-    L.intensity=1.35*(0.86+0.14*f)*(1-0.25*(sim.dread/100))}
+    L.intensity=3.7*(0.86+0.14*f)*(1-0.25*(sim.dread/100))}
   SND.update(now);SND.ambientTick(now);
   // floating world-space popups
   R.pops=(R.pops||[]).filter(p=>{const age=(now-p.t0)/1100;
