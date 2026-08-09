@@ -116,6 +116,23 @@ body.locked{overflow:hidden}
 @media(max-width:620px){#acts{left:128px;right:50px}}
 #acts button{padding:8px 10px;font-size:11px;background:rgba(27,34,45,.9)}
 #acts button.primary{background:var(--hazard)}
+#acts button .cost{opacity:.55;font-size:9.5px;margin-left:4px}
+/* who is acting, and with how much left — read it without looking away */
+#acts .selinfo{display:flex;align-items:center;gap:7px;padding:7px 11px;
+  font-family:var(--mono);font-size:11px;background:rgba(8,11,16,.78);
+  border:1px solid var(--line);border-radius:3px;color:var(--bone);flex:none}
+#acts .selinfo b{color:var(--hazard);letter-spacing:.08em;font-weight:700}
+#acts .selinfo .ap{color:var(--hazard)}
+/* the running objective, top centre under the gauge */
+#objline{position:absolute;top:36px;left:50%;transform:translateX(-50%);z-index:23;
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--bone);
+  background:rgba(8,11,16,.74);border:1px solid var(--line);
+  border-left:3px solid var(--hazard);padding:3px 11px;border-radius:3px;
+  pointer-events:none;max-width:64vw;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+#objline:empty{display:none}
+#objline.warn{border-left-color:var(--blood);color:#F2C6BE}
+@media(max-width:620px){#objline{top:32px;font-size:10px;max-width:56vw}}
 /* right-edge panel toggles + drawer */
 #side{position:absolute;right:8px;top:56px;z-index:24;display:flex;
   flex-direction:column;gap:6px}
@@ -135,9 +152,9 @@ body.locked{overflow:hidden}
 .pane{display:none;padding:10px 12px;font-family:var(--mono);font-size:12px;
   line-height:1.7;overflow-y:auto;flex:1}
 .pane.on{display:block}
-/* ambient log ticker over the world */
+/* ambient log ticker over the world — sits one strip above the toast slot */
 #ticker{position:absolute;left:164px;right:56px;z-index:22;
-  bottom:calc(var(--actsH,46px) + 14px);
+  bottom:calc(var(--actsH,46px) + 48px);
   font-family:var(--mono);font-size:11.5px;line-height:1.55;pointer-events:none;
   display:flex;flex-direction:column;align-items:flex-start;gap:2px}
 @media(max-width:620px){#ticker{left:128px;font-size:11px}}
@@ -191,9 +208,16 @@ body.tut #ticker{display:none}
 @media(prefers-reduced-motion:no-preference){
   .tut-glow{animation:tutpulse 1.2s ease-in-out infinite alternate}
   @keyframes tutpulse{from{outline-color:var(--hazard)}to{outline-color:#8a6532}}}
-.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1B222D;
-  border:1px solid var(--hazard);color:var(--bone);padding:8px 14px;border-radius:4px;
-  font-family:var(--mono);font-size:12px;z-index:120;opacity:0;transition:opacity .25s;max-width:92vw}
+/* action feedback lives in its own reserved strip directly above the action
+   bar (and above the coach card while training) — it never covers buttons,
+   ticker or tutorial, and it never eats a tap */
+.toast{position:fixed;left:50%;
+  bottom:calc(var(--actsH,46px) + var(--tutH,0px) + 16px);
+  transform:translateX(-50%);background:rgba(20,26,35,.92);
+  border:1px solid var(--hazard);color:var(--bone);padding:6px 14px;border-radius:4px;
+  font-family:var(--mono);font-size:12px;z-index:41;opacity:0;transition:opacity .25s;
+  max-width:min(560px,92vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  pointer-events:none}
 .toast.on{opacity:1}
 .screen{display:none}.screen.on{display:block}
 </style>
@@ -299,9 +323,12 @@ body.tut #ticker{display:none}
       Rooms you have already been through stay dimly remembered; anything
       moving in them does not.<br>
       <br><b style="color:var(--hazard)">CONTROLS</b><br>
-      Tap a card or token to select · tap a glowing tile to move · tap
-      adjacent doors and objects to use them · drag to pan · pinch or wheel
-      to zoom · SND toggles audio.<br>
+      Tap a card or token to select · tap a glowing tile to move · everything
+      you can use is a named button in the action bar · drag to pan · pinch or
+      wheel to zoom · SND toggles audio.<br>
+      Keys: <b>1/2/3</b> select a specialist · <b>TAB</b> cycles ·
+      <b>ENTER</b> ends the turn · <b>H</b> hide · <b>F</b> sprint ·
+      <b>ESC</b> closes panels.<br>
       <br><b style="color:var(--hazard)">THE NIGHT</b><br>
       Confirm the entity from its Tells (JNL) — the report can be wrong.
       Place its rite reagents at A, meet the rite's condition, Channel until
@@ -312,6 +339,7 @@ body.tut #ticker{display:none}
     </div>
   </div>
   <div id="ticker"></div>
+  <div id="objline"></div>
 </div>
 <div id="modal"><div class="box"><h2 id="mTitle"></h2><div class="body" id="mBody"></div><div class="row" id="mRow"></div></div></div>
 <div id="tutcard"><div class="hd"><span class="step" id="tutStep"></span>
@@ -1573,6 +1601,18 @@ function makeSprite(txt,color,scale=0.66){
   const m=new THREE.SpriteMaterial({map:spriteTx(txt,color),transparent:true,
     depthWrite:false});
   const s=new THREE.Sprite(m);s.scale.set(scale,scale,1);return s}
+// faded room names painted on the boards — blueprint lettering, not UI
+function wordPlane(txt){const k="wp:"+txt;
+  if(!TEX[k]){const c=document.createElement("canvas");c.width=256;c.height=64;
+    const g=c.getContext("2d");g.font="700 24px Arial";g.textAlign="center";
+    g.textBaseline="middle";g.fillStyle="#EFE8D9";
+    // manual letterspacing for the surveyor's-stencil look
+    const sp=txt.split("").join("  ");
+    g.fillText(sp,128,34);TEX[k]=new THREE.CanvasTexture(c)}
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2.3,0.575),
+    new THREE.MeshBasicMaterial({map:TEX[k],transparent:true,opacity:0.15,
+      depthWrite:false}));
+  m.rotation.x=-Math.PI/2;return m}
 // A gobo for the headlamps: real torches never throw a clean disc.
 function cookieTex(){if(TEX.cookie)return TEX.cookie;
   const c=document.createElement("canvas");c.width=c.height=128;
@@ -2267,6 +2307,18 @@ function sceneSync(){if(!R||!sim)return;
   // dynamic overlays: rebuild
   const G=R.dynG;
   while(G.children.length)G.remove(G.children[0]);
+  clearHover();
+  // room names, once any of the room has been seen
+  for(const[rname,rr]of Object.entries(ROOMS)){
+    if(rname==="Van")continue;
+    let seen=false;
+    for(let y=rr[1];y<=rr[3]&&!seen;y++)
+      for(let x=rr[0];x<=rr[2];x++)
+        if(seenAt([x,y])){seen=true;break}
+    if(!seen)continue;
+    const m=wordPlane(rname.toUpperCase());
+    m.position.set(rr[0]+(rr[2]-rr[0]+1)/2,0.024,rr[1]+(rr[3]-rr[1]+1)/2);
+    G.add(m)}
   const flat=(w,d,color,opacity,p,y=0.03)=>{
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
       new THREE.MeshBasicMaterial({color,transparent:true,opacity,
@@ -2483,7 +2535,7 @@ function bindInput(el){
     if(ptrs.size===2){const a=[...ptrs.values()];
       pinch0={d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),half:R.cam.th}}});
   el.addEventListener("pointermove",e=>{const p=ptrs.get(e.pointerId);
-    if(!p)return;
+    if(!p){if(e.pointerType==="mouse")hoverAt(e);return}
     const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
     if(ptrs.size===2&&pinch0){const a=[...ptrs.values()];
       const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
@@ -2512,6 +2564,57 @@ function tapAt(e){if(!sim||sim.over)return;
   const p=[Math.floor(hit.x),Math.floor(hit.z)];
   if(p[0]<0||p[1]<0||p[0]>=sim.site.w||p[1]>=sim.site.h)return;
   tapTile(p)}
+// desktop nicety: hovering a reachable tile sketches the walk before you
+// commit to it — footfall dots along the actual path the move will take
+let hoverTile=null;
+function clearHover(){hoverTile=null;
+  if(R&&R.hoverG)while(R.hoverG.children.length)R.hoverG.remove(R.hoverG.children[0])}
+function hoverAt(e){
+  if(!sim||sim.over||!R||!sel||!sel.mobile()||sel.hidden||!sel.ap){clearHover();return}
+  const r=R.renderer.domElement.getBoundingClientRect();
+  ndc.x=((e.clientX-r.left)/r.width)*2-1;
+  ndc.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(ndc,R.camera);
+  const hit=new THREE.Vector3();
+  if(!ray.ray.intersectPlane(groundPlane,hit)){clearHover();return}
+  const p=[Math.floor(hit.x),Math.floor(hit.z)];
+  if(hoverTile&&hoverTile[0]===p[0]&&hoverTile[1]===p[1])return;
+  clearHover();hoverTile=p;
+  const site=sim.site;
+  if(p[0]<0||p[1]<0||p[0]>=site.w||p[1]>=site.h)return;
+  if(!site.walkable(p)||!seenAt(p))return;
+  if(!R.hoverG){R.hoverG=new THREE.Group();R.scene.add(R.hoverG)}
+  const limit=sprint?7:(sel.carrying?3:(sel.cls==="Scout"?5:4));
+  const blocked=sim.squad.filter(o=>o!==sel&&o.mobile()).map(o=>o.pos);
+  const path=site.path(sel.pos,p,{blocked});
+  if(!path||!path.length||path.length>limit)return;
+  const mat=new THREE.MeshBasicMaterial({color:sprint?0xC8564C:0xF2E9D8,
+    transparent:true,opacity:0.5,depthWrite:false});
+  if(!GEO.hoverDot)GEO.hoverDot=new THREE.CircleGeometry(0.085,10);
+  path.forEach((q,i)=>{const m=new THREE.Mesh(GEO.hoverDot,mat);
+    m.rotation.x=-Math.PI/2;m.scale.setScalar(i===path.length-1?1.7:1);
+    m.position.set(q[0]+0.5,0.052,q[1]+0.5);R.hoverG.add(m)})}
+// keyboard: selection, cycling, turn end — documented in the field guide
+addEventListener("keydown",e=>{
+  if(!sim||!$("#play").classList.contains("on"))return;
+  if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+  if($("#modal").classList.contains("on")){
+    if(e.key==="Escape")closeModal();return}
+  const k=e.key;
+  if(k==="Escape"){
+    if($("#drawer").classList.contains("on"))closeDrawer();
+    else{sel=null;renderAll()}return}
+  if(k==="1"||k==="2"||k==="3"){const s=sim.squad[+k-1];
+    if(s&&s.mobile()){sel=s;camFollow(s.pos);renderAll()}return}
+  if(k==="Tab"||k===" "){e.preventDefault();
+    const mob=sim.squad.filter(s=>s.mobile());if(!mob.length)return;
+    sel=mob[(mob.indexOf(sel)+1)%mob.length];camFollow(sel.pos);renderAll();return}
+  if(k==="Enter"||k==="e"||k==="E"){
+    if(document.activeElement&&document.activeElement.tagName==="BUTTON")return;
+    endTurn();return}
+  if((k==="h"||k==="H")&&sel&&sel.mobile()){
+    act(sel.hidden?sim.actUnhide(sel):sim.actHide(sel));return}
+  if((k==="f"||k==="F")&&sel&&sel.mobile()){sprint=!sprint;renderAll()}});
 function popup(text,color,p,scale=1){if(!R)return;
   const spr=makeWord(text,color);
   spr.scale.set(2.1*scale,0.4*scale,1);
@@ -2533,7 +2636,22 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   try{
    const C=this.ctx=new(window.AudioContext||window.webkitAudioContext)();
    const master=this.master=C.createGain();
-   master.gain.value=0.32;master.connect(C.destination);
+   master.gain.value=0.32;
+   // the glue that separates "sound design" from "chip beeps": everything
+   // passes through soft tape-style saturation, a bus compressor and gentle
+   // EQ shelves before it reaches the hardware
+   const hp=C.createBiquadFilter();hp.type="highpass";hp.frequency.value=36;
+   const shaper=C.createWaveShaper();
+   {const N=1024,curve=new Float32Array(N);
+    for(let i=0;i<N;i++){const x=(i/(N-1))*2-1;curve[i]=Math.tanh(x*1.5)/Math.tanh(1.5)}
+    shaper.curve=curve;shaper.oversample="2x"}
+   const comp=C.createDynamicsCompressor();
+   comp.threshold.value=-20;comp.knee.value=14;comp.ratio.value=3.2;
+   comp.attack.value=0.004;comp.release.value=0.18;
+   const airCut=C.createBiquadFilter();airCut.type="lowpass";
+   airCut.frequency.value=13500;airCut.Q.value=0.5;
+   master.connect(hp);hp.connect(shaper);shaper.connect(comp);
+   comp.connect(airCut);airCut.connect(C.destination);
    // a room to play it in: convolution reverb from exponentially decaying
    // noise — the standard procedural impulse response
    const IRLEN=Math.floor(C.sampleRate*2.1);
@@ -2559,6 +2677,15 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
    const lp=this.lp=C.createBiquadFilter();lp.type="lowpass";lp.frequency.value=200;
    const ng=C.createGain();ng.gain.value=0.10;
    ns.connect(lp);lp.connect(ng);ng.connect(g);
+   // the drone breathes: two very slow LFOs work the filter and the level so
+   // the bed is never a frozen tone
+   const lfo1=C.createOscillator();lfo1.frequency.value=0.06;
+   const lfo1g=C.createGain();lfo1g.gain.value=70;
+   lfo1.connect(lfo1g);lfo1g.connect(lp.frequency);
+   const lfo2=C.createOscillator();lfo2.frequency.value=0.11;
+   const lfo2g=C.createGain();lfo2g.gain.value=0.012;
+   lfo2.connect(lfo2g);lfo2g.connect(g.gain);
+   lfo1.start();lfo2.start();
    o1.start();o2.start();ns.start();
    if(C.state==="suspended")C.resume();
   }catch(e){this.ctx=null}},
@@ -2626,9 +2753,49 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
  step(room,pan){
   const k=(typeof ROOMFLOOR!=="undefined"&&ROOMFLOOR[room])||"wood";
   const spec=this.stepSpec(k);
-  this.modal(spec,0.05,pan,0.10);
-  setTimeout(()=>this.modal(spec,0.028,pan,0.14),58+Math.random()*26)},
- thump(vol){this.osc(62,0.22,"sine",vol,-28)},
+  const v=0.05*(0.8+Math.random()*0.4);      // no two steps identical
+  this.modal(spec,v,pan,0.10);
+  setTimeout(()=>this.modal(spec,v*0.55,pan,0.14),58+Math.random()*26)},
+ // an ensemble, not a beep: each pitch is a detuned oscillator pair with a
+ // shared vibrato, breathed in and out through a moving lowpass
+ pad(freqs,dur,vol,pan,o={}){const C=this.ctx;if(!C||this.muted)return;
+  const t=C.currentTime,att=o.att||0.12,rel=Math.min(dur*0.6,o.rel||dur*0.45);
+  const lp=C.createBiquadFilter();lp.type="lowpass";lp.Q.value=o.q||0.8;
+  lp.frequency.setValueAtTime(Math.max(60,o.f0||900),t);
+  if(o.f1)lp.frequency.exponentialRampToValueAtTime(Math.max(60,o.f1),t+dur);
+  const g=C.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol),t+att);
+  g.gain.setValueAtTime(Math.max(0.0002,vol),t+Math.max(att,dur-rel));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  lp.connect(g);this.out(g,pan,o.wet==null?0.6:o.wet);
+  const vib=C.createOscillator();vib.frequency.value=o.vibHz||3.8;
+  const vg=C.createGain();vg.gain.value=o.vib==null?1.8:o.vib;
+  vib.connect(vg);
+  for(const f of freqs)for(const d2 of[-1,1]){
+    const os=C.createOscillator();os.type=o.type||"sine";
+    os.frequency.value=f*(1+d2*(o.det==null?0.004:o.det));
+    vg.connect(os.frequency);
+    os.connect(lp);os.start(t);os.stop(t+dur+0.1)}
+  vib.start(t);vib.stop(t+dur+0.1)},
+ // air moving: looped noise pushed through a travelling bandpass
+ sweep(f0,f1,dur,vol,pan,q,o={}){const C=this.ctx;if(!C||this.muted)return;
+  const t=C.currentTime;
+  const s=C.createBufferSource();s.buffer=this.noiseBuf;s.loop=true;
+  const f=C.createBiquadFilter();f.type=o.type||"bandpass";
+  f.frequency.setValueAtTime(Math.max(30,f0),t);
+  f.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);
+  f.Q.value=q==null?1.4:q;
+  const g=C.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol),t+(o.att||dur*0.55));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f);f.connect(g);this.out(g,pan,o.wet==null?0.5:o.wet);
+  s.start(t);s.stop(t+dur+0.1)},
+ // a heart is wet muscle, not a sine blip: pitch-bent low modes + a chest
+ // of filtered noise, lub then dub handled by the caller
+ thump(vol){this.modal({modes:[[56,1.0,0.16,"sine",0.66],[88,0.42,0.11,"sine",0.7]],
+   noise:[140,0.4,0.06,0.6],wet:0.15},vol,0,0.05)},
  // How loud is a thing at that tile for the people actually on site? Uses
  // the sim's own propagation: -1 per tile, -3 per closed door, walls block.
  audibility(pos,noise){if(!sim||!pos)return 0;
@@ -2725,16 +2892,18 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
  play(name,pos){const C=this.ctx;if(!C||this.muted)return;
   const pan=this.panOf(pos);
   switch(name){
-  case"collapse":this.osc(36,2.0,"sawtooth",0.13,-13,0,600);
-    this.osc(53,1.6,"sine",0.09,-18,0);
+  case"collapse":this.osc(36,2.0,"sawtooth",0.13,-13,0,320);
+    this.osc(53,1.6,"sine",0.09,-18,0,500);
     this.hiss(1.8,0.10,170,0,0.45);
+    this.sweep(1400,120,1.6,0.05,0,0.7,{att:0.1});   // dust front rolling out
     for(let i=0;i<7;i++)setTimeout(()=>            // masonry coming down
       this.modal({modes:[[130+Math.random()*220,0.9,0.13],
         [420+Math.random()*300,0.4,0.07]],noise:[900,0.8,0.09,0.8],wet:0.9},
         0.05+Math.random()*0.05,(Math.random()-0.5)*1.4),
       120+i*(160+Math.random()*220));
     break;
-  case"tap":this.osc(880,0.05,"triangle",0.025);break;
+  case"tap":this.modal({modes:[[430,0.6,0.05],[760,0.35,0.035],[1240,0.18,0.02]],
+    noise:[2100,0.7,0.018,2.4],wet:0.2},0.03,pan,0.1);break;   // felt thock
   case"door":{
     this.hiss(0.36,0.05,230,pan,1.2);                  // dry hinge
     this.osc(148+Math.random()*70,0.34,"sawtooth",0.022,-58,pan,850);
@@ -2745,26 +2914,45 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
       noise:[500,0.4,0.07,1]},0.05,pan),330);          // the leaf settles
     break}
   case"ev":{const g0=this.ghostTone();
-    this.osc(g0*2+Math.random()*40,0.5,"sine",0.035,-160,pan);
-    this.osc(g0*3,0.35,"triangle",0.012,-60,pan);
-    this.hiss(0.4,0.02,1400,pan);break}
-  case"al":this.osc(196,0.3,"square",0.04,-40);break;
-  case"prelude":this.osc(70,1.4,"sawtooth",0.09,-38);
-    this.hiss(1.4,0.05,300);break;
+    // a presence, not a tone: inharmonic partials drifting under a breath
+    this.pad([g0,g0*1.5,g0*2.26],0.9,0.02,pan,
+      {f0:520,f1:1700,att:0.28,det:0.007,vib:3.2,vibHz:2.7,wet:0.75});
+    this.sweep(360,1500,0.7,0.022,pan,3.2,{att:0.25,wet:0.7});break}
+  case"al":this.modal({modes:[[72,1.0,0.42],[117,0.5,0.26],[181,0.28,0.15]],
+      noise:[260,0.5,0.11,0.8],wet:0.75},0.07,pan,0.06);
+    this.sweep(950,210,0.4,0.028,pan,1.1,{att:0.05});break;
+  case"prelude":this.sweep(90,850,1.7,0.055,0,1.0,{att:1.2,wet:0.7});
+    this.pad([46,61.5],1.9,0.05,0,
+      {type:"sawtooth",f0:130,f1:430,att:0.8,det:0.009,vib:1.2,wet:0.6});break;
   case"strike":this.modal({modes:[[92,1.0,0.30],[143,0.6,0.20],
       [268,0.3,0.12]],noise:[700,0.9,0.13,0.9],wet:0.8},0.13,pan);
     this.thump(0.10);break;
-  case"down":this.osc(330,0.28,"sine",0.06,-110);
-    setTimeout(()=>this.osc(220,0.5,"sine",0.06,-90),240);break;
-  case"chant":this.osc(110,0.9,"sine",0.045);
-    this.osc(165,0.9,"sine",0.03);break;
+  case"down":this.osc(300,0.5,"triangle",0.05,-170,pan,650);
+    this.sweep(800,140,0.7,0.03,pan,1.0,{att:0.05});
+    setTimeout(()=>this.modal({modes:[[64,1.0,0.4],[102,0.5,0.24]],
+      noise:[220,0.6,0.1,0.7],wet:0.7},0.07,pan,0.06),260);   // a body drops
+    break;
+  case"chant":this.pad([98,147,196.5],1.2,0.032,pan,
+      {f0:480,f1:950,att:0.35,det:0.005,vib:2.2,vibHz:2.1,wet:0.8});
+    this.sweep(380,720,1.0,0.011,pan,2.2,{att:0.4,wet:0.8});break;
   case"banish":{const g1=this.ghostTone();
-    this.osc(g1,1.4,"sawtooth",0.05,-g1*0.6);
-    this.osc(440,1.8,"sine",0.06);this.osc(660,1.8,"sine",0.045);
-    setTimeout(()=>{this.osc(880,2.0,"sine",0.045);
-      this.osc(1320,1.6,"sine",0.02)},280);break}
-  case"backfire":this.osc(233,0.9,"sawtooth",0.08,-90);
-    this.osc(247,0.9,"sawtooth",0.06,-90);this.hiss(0.8,0.07,500);break}},
+    this.sweep(220,2600,1.7,0.05,0,1.6,{att:1.25,wet:0.75});   // the pull
+    this.pad([g1,g1*2,g1*3.01,g1*4.02],2.3,0.026,0,
+      {f0:750,f1:3200,att:0.5,det:0.004,vib:2.6,wet:0.8});
+    setTimeout(()=>this.pad([1174.7,1568],1.5,0.012,0,
+      {f0:2400,att:0.3,det:0.003,wet:0.9}),340);               // shimmer on top
+    setTimeout(()=>{this.osc(88,1.0,"sine",0.09,-52,0,300);    // the room exhales
+      this.modal({modes:[[52,1.0,0.5],[84,0.5,0.3]],
+        noise:[160,0.6,0.16,0.6],wet:0.8},0.08,0,0.05)},1450);
+    break}
+  case"backfire":this.pad([108,114.5],1.1,0.06,0,
+      {type:"sawtooth",f0:1100,f1:170,att:0.03,det:0.012,vib:5,vibHz:6.3,wet:0.6});
+    this.sweep(1300,140,0.9,0.05,0,0.8,{att:0.04});
+    for(let i=0;i<3;i++)setTimeout(()=>this.modal(
+      {modes:[[150+Math.random()*260,0.9,0.12],[500+Math.random()*280,0.4,0.06]],
+       noise:[1000,0.8,0.08,0.9],wet:0.85},0.045,(Math.random()-0.5)),
+      180+i*210);
+    break}},
  toggle(){this.muted=!this.muted;
   if(this.master)this.master.gain.value=this.muted?0:0.32;
   return this.muted}};
@@ -2930,36 +3118,51 @@ function act([ok,msg]){toast(msg);
   if(ok){if(/moves|sprints|shoulders|carries/.test(msg)&&sel)
       SND.step(sim.site.room(sel.pos),SND.panOf(sel.pos));
     else SND.play(msg.includes("door")?"door":"tap",sel?sel.pos:null)}
-  if(ok)sprint=false;renderAll();logFlush()}
+  if(ok)sprint=false;
+  // hand the baton on: a specialist out of AP can do nothing more this turn
+  if(ok&&sel&&(!sel.mobile()||sel.ap===0)){
+    const nxt=sim.squad.find(s=>s.mobile()&&s.ap>0);
+    if(nxt&&nxt!==sel){sel=nxt;setTimeout(()=>{if(sel===nxt)camFollow(nxt.pos)},300)}}
+  renderAll();logFlush()}
 function renderActs(){const el=$("#acts");el.innerHTML="";
   const mk2=(label,fn,opts={})=>{const b=document.createElement("button");
     b.textContent=label;if(opts.cls)b.className=opts.cls;
+    if(opts.cost){const c=document.createElement("span");c.className="cost";
+      c.textContent=opts.cost;b.appendChild(c)}
     b.disabled=!!opts.dis;b.onclick=fn;el.appendChild(b);return b};
   if(sel&&sel.mobile()){
+    const info=document.createElement("div");info.className="selinfo";
+    const mv=sprint?7:(sel.carrying?3:(sel.cls==="Scout"?5:4));
+    info.innerHTML="<b>"+sel.name+"</b><span class='ap'>"+
+      "◆".repeat(sel.ap)+"◇".repeat(Math.max(0,2-sel.ap))+"</span>"+
+      "<span style='color:var(--dim)'>move "+mv+"</span>";
+    el.appendChild(info);
     for(const a of adjacent(sel))
-      mk2(a.label,()=>act(a.run()),{cls:a.primary?"primary":"on"});
-    const b=mk2("Sprint",()=>{sprint=!sprint;renderAll()});
+      mk2(a.label,()=>act(a.run()),{cls:a.primary?"primary":"on",cost:"1AP"});
+    const b=mk2("Sprint",()=>{sprint=!sprint;renderAll()},{cost:"2AP"});
     if(sprint)b.classList.add("on");
-    if(sel.hidden)mk2("Slip out",()=>act(sim.actUnhide(sel)));
-    else mk2("Hide",()=>act(sim.actHide(sel)));
-    mk2("Steady",()=>act(sim.actSteady(sel)));
+    if(sel.hidden)mk2("Slip out",()=>act(sim.actUnhide(sel)),{cost:"1AP"});
+    else mk2("Hide",()=>act(sim.actHide(sel)),{cost:"1AP"});
+    mk2("Steady",()=>act(sim.actSteady(sel)),{cost:"1AP"});
     const room=sim.site.room(sel.pos);
-    if(room in sim.site.fixtureOn)mk2("Light",()=>act(sim.actInteract(sel,"light")));
+    if(room in sim.site.fixtureOn)mk2("Light",()=>act(sim.actInteract(sel,"light")),{cost:"1AP"});
     if(sel.items.length)mk2("Place ▾",()=>{
       modal("Place / use item","Choose what "+sel.name+" sets down:",
         sel.items.map(it=>[RNAME[it],()=>{closeModal();act(sim.actPlace(sel,it))}])
-        .concat([["Cancel",closeModal]]))});
+        .concat([["Cancel",closeModal]]))},{cost:"1AP"});
     if(sim.site.room(sel.pos)==="Van")mk2("Crate ▾",()=>{
       if(!sim.site.crate)sim.site.crate=CRATE.slice();
       const uniq=[...new Set(sim.site.crate)];
       modal("Van staples crate","Take one item (1 AP):",
         uniq.map(it=>[RNAME[it],()=>{closeModal();act(sim.takeFromCrate(sel,it))}])
-        .concat([["Cancel",closeModal]]))});
-    if(sel.carrying)mk2("Lower",()=>act(sim.actLower(sel)));
+        .concat([["Cancel",closeModal]]))},{cost:"1AP"});
+    if(sel.carrying)mk2("Lower",()=>act(sim.actLower(sel)),{cost:"1AP"});
     const[ready]=sim.riteReady();
-    mk2("Channel",()=>act(sim.actChannel(sel)),{dis:!ready||sel.ap<2,cls:"on"});
+    mk2("Channel",()=>act(sim.actChannel(sel)),{dis:!ready||sel.ap<2,cls:"on",cost:"2AP"});
   }
-  const be=mk2("End turn",endTurn,{cls:"primary"});be.id="btnEnd"}
+  const left=sim.squad.filter(s=>s.mobile()).reduce((a,s)=>a+s.ap,0);
+  const be=mk2("End turn",endTurn,{cls:"primary",
+    cost:left>0?("◆"+left+" left"):null});be.id="btnEnd"}
 function endTurn(){if(!sim||sim.over)return;
   sel=null;sprint=false;
   const wasHunt=!!sim.hunt,wasPrelude=sim.prelude,wasBanished=sim.banished,
@@ -2991,6 +3194,8 @@ function endTurn(){if(!sim||sim.over)return;
   if(sim.banked>prevBanked&&!sim.banished)
     popup("CHANT "+sim.banked,"#DFA457",sim.contract.anchor);
   if(sim.over&&sim.outcome==="failed")showBanner("SQUAD DOWN","var(--blood)");
+  // new turn: put the first specialist who can act in the player's hand
+  if(!sim.over){const nxt=sim.squad.find(s=>s.mobile()&&s.ap>0);if(nxt)sel=nxt}
   renderAll();logFlush();
   if(sim.over)setTimeout(showDebrief,600)}
 function renderChips(){const el=$("#chips");el.innerHTML="";
@@ -3009,7 +3214,25 @@ function renderChips(){const el=$("#chips");el.innerHTML="";
       '<div class="tags">'+(tags.join(" · ")||(inv||"—"))+"</div>";
     d.onclick=()=>{sel=(sel===s?null:s);if(sel)camFollow(sel.pos);renderAll()};
     el.appendChild(d)}}
+// one line that always answers "what am I supposed to be doing?"
+function objectiveText(){
+  if(!sim)return["",""];
+  if(sim.over)return["Contract closed — read the debrief",""];
+  if(sim.collapse){const left=Math.max(0,sim.collapse.limit-sim.collapse.t);
+    return["GET OUT — "+(sim.alpha.rescued?"":"shoulder the Alpha, ")+
+      "everyone to the van · "+left+" round"+(left===1?"":"s"),"warn"]}
+  if(sim.hunt)return["HUNT — hide, break line of sight, or finish the rite","warn"];
+  if(sim.prelude)return["PRELUDE — a Hunt follows next round","warn"];
+  if(!sim.anchorFound)return["Sweep the house — a hum marks the Anchor's room",""];
+  if(!sim.anchorConfirmed)return["Anchor room found — INSPECT the ? markers",""];
+  if(!sim.journal.workingId)return["Identify the entity — confirm Tells, file the ID (JNL)",""];
+  const[ready,why]=sim.riteReady();
+  if(!ready)return["Stage the "+sim.rite().name+" — "+why,""];
+  if(sim.banked>0)return["Hold the chant — banked "+sim.banked+"/"+sim.rite().len,""];
+  return["Rite staged — stand beside A and CHANNEL",""]}
 function renderRail(){$("#round").textContent=sim.round;
+  {const[txt,cls]=objectiveText();const ol=$("#objline");
+   if(ol){ol.textContent=txt;ol.className=cls}}
   if(sim.collapse){const c=sim.collapse,left=Math.max(0,c.limit-c.t);
     $("#gfill").style.width=(100*left/c.limit)+"%";
     $("#gfill").style.background="linear-gradient(90deg,#C8564C,#E0A050)";
