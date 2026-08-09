@@ -1545,6 +1545,30 @@ function makeWord(txt,color){const k="wd:"+txt+color;
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX[k],
     transparent:true,depthWrite:false}));
   s.scale.set(2.1,0.4,1);return s}
+// Name plate, not a floating capital: a dark dog-tag with the crew colour on
+// its edge, so three figures in one beam stay tellable apart without shouting.
+function nameTagTx(name,color){const k="nt:"+name+color;if(TEX[k])return TEX[k];
+  const c=document.createElement("canvas");c.width=256;c.height=72;
+  const g=c.getContext("2d");
+  const x0=10,y0=16,w=236,h=40,r=8;
+  g.beginPath();
+  g.moveTo(x0+r,y0);g.lineTo(x0+w-r,y0);g.quadraticCurveTo(x0+w,y0,x0+w,y0+r);
+  g.lineTo(x0+w,y0+h-r);g.quadraticCurveTo(x0+w,y0+h,x0+w-r,y0+h);
+  g.lineTo(x0+r,y0+h);g.quadraticCurveTo(x0,y0+h,x0,y0+h-r);
+  g.lineTo(x0,y0+r);g.quadraticCurveTo(x0,y0,x0+r,y0);g.closePath();
+  g.fillStyle="rgba(7,10,17,0.78)";g.fill();
+  g.strokeStyle=color;g.globalAlpha=0.55;g.lineWidth=2;g.stroke();
+  g.globalAlpha=1;
+  g.fillStyle=color;g.fillRect(x0+6,y0+9,5,h-18);
+  g.font="600 25px ui-monospace,Menlo,Consolas,monospace";
+  g.textAlign="center";g.textBaseline="middle";
+  g.shadowColor="#000";g.shadowBlur=5;
+  g.fillStyle="#EFE8D9";g.fillText(name.toUpperCase(),x0+w/2+6,y0+h/2+1);
+  const t=new THREE.CanvasTexture(c);TEX[k]=t;return t}
+function makeNameTag(name,color){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:nameTagTx(name,color),
+    transparent:true,depthWrite:false}));
+  s.scale.set(1.12,0.315,1);return s}
 function makeSprite(txt,color,scale=0.66){
   const m=new THREE.SpriteMaterial({map:spriteTx(txt,color),transparent:true,
     depthWrite:false});
@@ -1917,40 +1941,99 @@ function buildStatic(){
     m.rotation.y=rr.random()*3.1;G.add(m);reg(m,x,y)}}
 function addProp(G,room,kind,x,y,reg){
   const g=new THREE.Group();g.position.set(x+0.5,0,y+0.5);
-  const B=(w,h,d,c,ox=0,oy=0,oz=0)=>{const m=box(w,h,d,c);
-    m.position.set(ox,oy+h/2,oz);g.add(m);if(reg)reg(m,x,y);return m};
+  const B=(w,h,d,c,ox=0,oy=0,oz=0,rot=0)=>{const m=box(w,h,d,c);
+    m.position.set(ox,oy+h/2,oz);if(rot)m.rotation.y=rot;
+    g.add(m);if(reg)reg(m,x,y);return m};
+  const cyl=(rt,rb,h,c,ox,oy,oz,seg)=>{
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),
+      new THREE.MeshStandardMaterial({color:c,roughness:0.85}));
+    m.position.set(ox,oy+h/2,oz);m.castShadow=true;m.receiveShadow=true;
+    g.add(m);if(reg)reg(m,x,y);return m};
   if(kind==="hide"){
-    if(room==="Bedroom"){B(0.95,0.32,0.72,0x6E5A41);
-      B(0.86,0.15,0.62,0xB8AF9A,0,0.32);B(0.3,0.1,0.5,0xD8D3C4,-0.24,0.47);
-      B(0.95,0.5,0.08,0x5C4A35,0,0,-0.36)}   // bed you hide under
-    else{B(0.75,0.92,0.6,0x54493B);
-      const s=box(0.46,0.55,0.05,0x1A1510);s.castShadow=false;
-      s.position.set(0,0.52,0.31);g.add(s);
-      B(0.06,0.1,0.06,0xB8AF9A,0.2,0.42,0.31)}} // wardrobe + handle
+    if(room==="Bedroom"){                       // a bed you can get under
+      B(0.95,0.14,0.72,0x5C4A35,0,0.16,0);      // frame
+      for(const sx of[-1,1])for(const sz of[-1,1])
+        B(0.07,0.16,0.07,0x4A3B2A,sx*0.42,0,sz*0.30);   // legs
+      B(0.86,0.13,0.62,0xB8AF9A,0,0.30,0);      // mattress
+      B(0.80,0.05,0.40,0x8A6E63,0,0.43,0.09);   // blanket
+      B(0.30,0.09,0.44,0xD8D3C4,-0.26,0.43,0);  // pillow
+      B(0.95,0.42,0.08,0x5C4A35,0,0.16,-0.36)}  // headboard
+    else{                                        // a wardrobe
+      B(0.78,0.05,0.62,0x4A3B2A,0,0,0);          // plinth
+      B(0.74,0.86,0.58,0x54493B,0,0.05,0);
+      B(0.82,0.05,0.66,0x5C4A35,0,0.91,0);       // cornice
+      for(const sx of[-1,1]){
+        const d=B(0.35,0.72,0.04,0x453B2F,sx*0.185,0.12,0.30);
+        d.material.color.multiplyScalar(sx>0?1.06:0.94)}
+      for(const sx of[-1,1])
+        cyl(0.018,0.018,0.05,0xB8AF9A,sx*0.04,0.44,0.33,6).rotation.x=Math.PI/2}}
   else if(kind==="tall"){
-    if(room==="Study"){B(0.9,0.98,0.4,0x5C4A35);
-      for(let i=0;i<4;i++)B(0.16,0.14,0.05,[0x8a4a3e,0x4a6a5a,0x9a8a4e,0x5a5a7a][i],
-        -0.3+i*0.2,0.62,0.21)}                 // bookshelf with spines
-    else if(room==="Cellar"){B(0.85,0.72,0.42,0x5C4A35);
-      const b=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.22,0.5,10),
-        new THREE.MeshLambertMaterial({color:0x6E5A41}));
-      b.castShadow=true;b.position.set(0.15,0.25,0.4);g.add(b)}  // shelf + barrel
-    else B(0.82,0.95,0.6,0x6E5A41)}
+    if(room==="Study"){                          // bookcase with actual books
+      B(0.9,0.98,0.34,0x5C4A35,0,0,0);
+      B(0.82,0.03,0.28,0x4A3B2A,0,0.30,0.02);
+      B(0.82,0.03,0.28,0x4A3B2A,0,0.58,0.02);
+      const cols=[0x8a4a3e,0x4a6a5a,0x9a8a4e,0x5a5a7a,0x7a4a5a,0x3f5a45];
+      const rr3=RNG("books:"+x+","+y);
+      for(let shelf=0;shelf<3;shelf++){
+        let px=-0.36;
+        while(px<0.34){
+          const bw=0.035+rr3.random()*0.03,bh=0.16+rr3.random()*0.08;
+          B(bw,bh,0.2,cols[Math.floor(rr3.random()*cols.length)],
+            px+bw/2,0.03+shelf*0.28,0.03);
+          px+=bw+0.006+rr3.random()*0.012}}}
+    else if(room==="Cellar"){                    // shelving and a barrel
+      B(0.85,0.06,0.4,0x5C4A35,0,0.30,0);
+      B(0.85,0.06,0.4,0x5C4A35,0,0.62,0);
+      for(const sx of[-1,1])B(0.06,0.9,0.06,0x4A3B2A,sx*0.39,0,0);
+      const pts=[];
+      for(let i2=0;i2<=6;i2++){const t=i2/6;
+        pts.push(new THREE.Vector2(0.17+Math.sin(t*Math.PI)*0.055,t*0.5))}
+      const bar=new THREE.Mesh(new THREE.LatheGeometry(pts,12),
+        new THREE.MeshStandardMaterial({color:0x6E5A41,roughness:0.9}));
+      bar.position.set(0.18,0,0.34);bar.castShadow=true;g.add(bar);
+      if(reg)reg(bar,x,y);
+      for(const hy of[0.10,0.40])
+        cyl(0.215,0.215,0.025,0x3A3A3E,0.18,hy,0.34,12)}
+    else{B(0.8,0.95,0.55,0x6E5A41,0,0,0);        // plain cupboard
+      B(0.86,0.04,0.6,0x5C4A35,0,0.95,0);
+      for(const sx of[-1,1])B(0.36,0.78,0.03,0x5A4B39,sx*0.19,0.08,0.28)}}
   else if(kind==="low"){
-    if(room==="Kitchen"){B(0.9,0.46,0.62,0x8A8F93);
-      B(0.34,0.05,0.4,0x2A2E33,0.18,0.46);B(0.1,0.1,0.1,0x2A2E33,-0.25,0.46)}
-    else if(room==="Living"){B(0.88,0.28,0.5,0x7A5548,0,0,0.06);
-      B(0.88,0.34,0.16,0x6A4A3E,0,0.1,-0.2);
-      B(0.14,0.3,0.5,0x6A4A3E,-0.38,0.06,0.06);
-      B(0.14,0.3,0.5,0x6A4A3E,0.38,0.06,0.06)}   // sofa
-    else if(room==="Study"){B(0.9,0.42,0.5,0x5C4A35);
-      B(0.2,0.12,0.14,0xD8D3C4,0.2,0.42)}        // desk + papers
-    else if(room==="Hall"){B(0.7,0.36,0.5,0x6E5A41);
-      B(0.5,0.12,0.36,0x54493B,0,0.36)}          // stacked crates
-    else B(0.8,0.4,0.55,0x7A664B)}
+    if(room==="Kitchen"){                        // counter, sink and tap
+      B(0.9,0.42,0.58,0x8A8F93,0,0,0);
+      B(0.96,0.05,0.64,0xB9B3A6,0,0.42,0);       // worktop with overhang
+      B(0.34,0.04,0.34,0x6E7478,0.2,0.44,0);     // basin
+      cyl(0.02,0.02,0.14,0xB9B3A6,0.2,0.47,-0.14,8);
+      B(0.03,0.03,0.1,0xB9B3A6,0.2,0.60,-0.10);
+      for(const sx of[-1,1])                     // cupboard doors
+        B(0.4,0.32,0.02,0x7A8085,sx*0.22,0.05,0.30)}
+    else if(room==="Living"){                    // sofa with cushions
+      B(0.9,0.16,0.56,0x6A4A3E,0,0,0.02);
+      B(0.9,0.32,0.14,0x7A5548,0,0.16,-0.22);    // back
+      for(const sx of[-1,1])B(0.12,0.26,0.5,0x7A5548,sx*0.39,0.16,0.04);
+      for(const sx of[-1,1])B(0.36,0.1,0.42,0x8A6155,sx*0.2,0.16,0.06)}
+    else if(room==="Study"){                     // desk, papers, lamp
+      B(0.94,0.05,0.54,0x5C4A35,0,0.4,0);
+      for(const sx of[-1,1])for(const sz of[-1,1])
+        B(0.055,0.4,0.055,0x4A3B2A,sx*0.42,0,sz*0.22);
+      B(0.2,0.012,0.15,0xD8D3C4,0.16,0.45,0.06,0.3);
+      B(0.18,0.012,0.14,0xCFC9BA,-0.1,0.45,-0.04,-0.2);
+      cyl(0.03,0.05,0.12,0x3A3F46,-0.3,0.45,-0.12,8)}
+    else if(room==="Hall"){                      // stacked crates with slats
+      for(const[cx,cy,cz,cs]of[[0,0,0,0.46],[0.12,0.3,0.06,0.34]]){
+        B(cs,0.3,cs,0x6E5A41,cx,cy,cz);
+        for(const t of[0.06,0.22])
+          B(cs+0.01,0.03,cs+0.01,0x54452F,cx,cy+t,cz)}}
+    else{B(0.8,0.4,0.55,0x7A664B,0,0,0);
+      B(0.86,0.04,0.6,0x6E5A41,0,0.4,0)}}
   G.add(g)}
-// One figure recipe for everyone on site — Bravo crew and Alpha casualties
-// alike read as people in overalls, never as markers.
+// A hard hat as a turned profile reads better than a stack of cylinders.
+function hatGeo(){if(GEO.hat)return GEO.hat;
+  const pts=[];
+  for(let i=0;i<=8;i++){const t=i/8;
+    pts.push(new THREE.Vector2(0.155*Math.sin(t*Math.PI*0.5)+0.005,
+      0.105*Math.cos(t*Math.PI*0.5)))}
+  pts.push(new THREE.Vector2(0.185,0.012),new THREE.Vector2(0.195,0.0));
+  return GEO.hat=new THREE.LatheGeometry(pts,14)}
 function makeWorker(overall,hat,withLamp){
   const grp=new THREE.Group();
   const inner=new THREE.Group();grp.add(inner);
@@ -1959,33 +2042,48 @@ function makeWorker(overall,hat,withLamp){
     {color:c,transparent:true,roughness:0.72,metalness:0.05,
      emissive:e||0x000000,emissiveIntensity:e?1.4:0});
     mats.push(m);return m};
-  const legs=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.22),M(0x3A3F46));
-  legs.position.y=0.1;legs.castShadow=true;inner.add(legs);
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.36,0.28),M(overall));
-  body.position.y=0.38;body.castShadow=true;inner.add(body);
-  const strap=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.07,0.3),M(0x2E333B));
-  strap.position.y=0.31;inner.add(strap);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),M(0xC9A98F));
-  head.position.y=0.66;head.castShadow=true;inner.add(head);
-  const hatM=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.09,12),M(hat));
-  hatM.position.y=0.77;inner.add(hatM);
-  const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.02,12),M(hat));
-  brim.position.y=0.735;inner.add(brim);
-  const lampDot=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,6),
-    M(withLamp?0xFFF2C8:0x6A6256,withLamp?0xFFE7A0:0));
-  lampDot.position.set(0,0.76,0.16);inner.add(lampDot);
+  const limbMat=M(0x333941),bootMat=M(0x23272C),skin=M(0xC9A98F),
+    hatMat=M(hat),coat=M(overall),belt=M(0x2A2F36);
+  const mk=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);m.castShadow=true;return m};
+  const legGeo=new THREE.CapsuleGeometry(0.062,0.17,3,8);
+  const legs=[];
+  for(const sx of[-1,1]){
+    const hip=new THREE.Group();hip.position.set(sx*0.085,0.30,0);
+    hip.add(mk(legGeo,limbMat,0,-0.14,0));
+    hip.add(mk(new THREE.BoxGeometry(0.115,0.075,0.17),bootMat,0,-0.27,0.02));
+    inner.add(hip);legs.push(hip)}
+  const body=mk(new THREE.BoxGeometry(0.33,0.34,0.24),coat,0,0.44,0);
+  inner.add(body);
+  inner.add(mk(new THREE.BoxGeometry(0.38,0.1,0.26),coat,0,0.585,0));
+  inner.add(mk(new THREE.BoxGeometry(0.36,0.055,0.27),belt,0,0.30,0));
+  for(const sx of[-1,1])
+    inner.add(mk(new THREE.BoxGeometry(0.075,0.09,0.06),belt,sx*0.13,0.275,0.13));
+  inner.add(mk(new THREE.BoxGeometry(0.24,0.26,0.11),belt,0,0.46,-0.18));
+  const armGeo=new THREE.CapsuleGeometry(0.052,0.16,3,8);
+  const arms=[];
+  for(const sx of[-1,1]){
+    const sh=new THREE.Group();sh.position.set(sx*0.205,0.57,0);
+    sh.add(mk(armGeo,limbMat,0,-0.13,0));
+    sh.add(mk(new THREE.SphereGeometry(0.052,8,6),bootMat,0,-0.25,0));
+    inner.add(sh);arms.push(sh)}
+  inner.add(mk(new THREE.CylinderGeometry(0.05,0.06,0.06,8),skin,0,0.635,0));
+  const head=mk(new THREE.SphereGeometry(0.115,14,12),skin,0,0.72,0);
+  head.scale.set(1,1.08,0.95);inner.add(head);
+  inner.add(mk(hatGeo(),hatMat,0,0.775,0));
+  inner.add(mk(new THREE.SphereGeometry(0.033,8,6),
+    M(withLamp?0xFFF2C8:0x6A6256,withLamp?0xFFE7A0:0),0,0.80,0.145));
   let lamp=null;
   if(withLamp){lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
     lamp.map=cookieTex();
-    lamp.position.set(0,0.78,0.1);
+    lamp.position.set(0,0.82,0.1);
     const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
     inner.add(lt);lamp.target=lt;inner.add(lamp)}
-  return {grp,inner,mats,lamp}}
-// The night only gives up what a headlamp finds — or what you switch on.
+  return {grp,inner,mats,lamp,legs,arms,body}}
 function buildFog(){
   const W=sim.site.w,H=sim.site.h,data=new Uint8Array(W*H*4);
-  for(let i=0;i<W*H;i++){data[i*4]=6;data[i*4+1]=9;data[i*4+2]=16;
-    data[i*4+3]=236}
+  for(let i=0;i<W*H;i++){data[i*4]=5;data[i*4+1]=7;data[i*4+2]=13;
+    data[i*4+3]=255}
   const tex=new THREE.DataTexture(data,W,H,THREE.RGBAFormat);
   tex.minFilter=tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H),
@@ -2023,10 +2121,14 @@ function computeVision(){
   for(let i=0;i<vis.length;i++)if(vis[i]>0.25)R.seen[i]=1;
   return vis}
 function updateFog(vis){const {data,tex}=R.fog,W=sim.site.w,H=sim.site.h;
+  // Once the contract is decided nobody is left to hold a lamp, so the live
+  // cone collapses to nothing. Hand the map back instead of cutting to black:
+  // remembered ground lifts, and even unwalked ground shows as a faint plan.
+  const rest=sim.over?0.62:0.30,unknown=sim.over?0.10:0;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i=y*W+x;
-    const v=vis[i]>0?vis[i]:(R.seen[i]?0.30:0);
-    data[((H-1-y)*W+x)*4+3]=Math.round((1-Math.max(0,Math.min(1,v)))*236)}
+    const v=vis[i]>0?vis[i]:(R.seen[i]?rest:unknown);
+    data[((H-1-y)*W+x)*4+3]=Math.round((1-Math.max(0,Math.min(1,v)))*255)}
   tex.needsUpdate=true}
 function seenAt(p){return R.seen&&R.seen[p[1]*sim.site.w+p[0]]}
 // The beam you actually read from above: a ground-projected cone, clipped by
@@ -2053,7 +2155,7 @@ const BEAM_FRAG=`uniform vec3 uColor;uniform float uTime,uInt,uW,uH;
   float a=pow(1.0-d,2.7)*0.85;
   a*=pow(1.0-ang,2.2);
   a*=0.88+0.12*sin(uTime*2.3+d*9.0);
-  float vis=1.0-texture2D(tFog,vec2(vW.x/uW,1.0-vW.z/uH)).a/0.926;
+  float vis=1.0-texture2D(tFog,vec2(vW.x/uW,1.0-vW.z/uH)).a;
   a*=smoothstep(0.12,0.55,vis);
   gl_FragColor=vec4(uColor*a*uInt,a*uInt);}`;
 function makeBeam(){
@@ -2067,6 +2169,7 @@ function makeBeam(){
 function buildUnits(){const G=R.unitG;
   while(G.children.length)G.remove(G.children[0]);
   R.units={};
+  let ti=0;
   for(const s of sim.squad){
     const w=makeWorker(CLSCOL[s.cls],CLSCOL[s.cls],true);
     const {grp,inner,mats}=w;
@@ -2075,7 +2178,10 @@ function buildUnits(){const G=R.unitG;
         opacity:0.9,side:THREE.DoubleSide}));
     ring.rotation.x=-Math.PI/2;ring.position.y=0.02;ring.visible=false;
     grp.add(ring);
-    const tag=makeSprite(s.name[0],"#F0E9D8",0.62);tag.position.y=1.22;grp.add(tag);
+    const tag=makeNameTag(s.name,"#"+CLSCOL[s.cls].toString(16).padStart(6,"0"));
+    // stagger the plates: shoulder to shoulder in a doorway they stack
+    // instead of colliding into one illegible bar
+    tag.position.y=1.24+(ti++)*0.19;grp.add(tag);
     const burden=new THREE.Mesh(new THREE.CapsuleGeometry(0.13,0.3,4,8),
       new THREE.MeshStandardMaterial({color:0xC9C4B8,roughness:0.8}));
     burden.rotation.z=Math.PI/2.3;burden.position.set(0.05,0.86,-0.14);
@@ -2083,6 +2189,7 @@ function buildUnits(){const G=R.unitG;
     const beam=makeBeam();inner.add(beam);
     R.unitG.add(grp);
     R.units[s.name]={grp,inner,mats,ring,tag,burden,lamp:w.lamp,beam,
+      legs:w.legs,arms:w.arms,body:w.body,gait:0,
       dir:Math.PI,pop:0,px:null,pz:null}}
   // ghost: identity per 02 §6 — color, bulk, bearing
   const gv=GHOSTVIS[sim.contract.trueGhost]||{c:0x7FD6B4,s:1,tall:false};
@@ -2277,9 +2384,19 @@ function frame(now){requestAnimationFrame(frame);
   for(const s of sim.squad){const u=R.units[s.name];if(!u)continue;
     const a=animPos(s.name,s.pos);
     u.grp.position.set(a.x+0.5,0,a.y+0.5);
+    let speed=0;
     if(u.px!=null){const dx=a.x-u.px,dz=a.y-u.pz;
-      if(Math.abs(dx)+Math.abs(dz)>0.004)u.dir=Math.atan2(dx,dz)}
+      speed=Math.abs(dx)+Math.abs(dz);
+      if(speed>0.004)u.dir=Math.atan2(dx,dz)}
     u.px=a.x;u.pz=a.y;
+    if(!REDUCED&&u.legs){                       // gait: hips and arms oppose
+      u.gait=(u.gait||0)+Math.min(0.9,speed*11);
+      const sw=Math.sin(u.gait)*(speed>0.004?0.62:0)
+        +(speed>0.004?0:Math.sin(now*0.0016)*0.02);
+      u.legs[0].rotation.x=sw;u.legs[1].rotation.x=-sw;
+      if(u.arms){u.arms[0].rotation.x=-sw*0.75;u.arms[1].rotation.x=sw*0.75}
+      if(u.body)u.body.position.y=0.44+Math.abs(Math.sin(u.gait))*0.018*
+        (speed>0.004?1:0)}
     let dd=u.dir-u.inner.rotation.y;
     while(dd>Math.PI)dd-=2*Math.PI;while(dd<-Math.PI)dd+=2*Math.PI;
     u.inner.rotation.y+=dd*(REDUCED?1:0.25);
@@ -2458,7 +2575,8 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
     this.thump(0.09);setTimeout(()=>this.thump(0.055),150)}},
  out(node,pan,wetAmt){const C=this.ctx;let n=node;
   if(C.createStereoPanner){const pn=C.createStereoPanner();
-    pn.pan.value=Math.max(-1,Math.min(1,pan||0));n.connect(pn);n=pn}
+    pn.pan.value=Number.isFinite(pan)?Math.max(-1,Math.min(1,pan)):0;
+    n.connect(pn);n=pn}
   n.connect(this.master);
   const w=C.createGain();w.gain.value=wetAmt==null?0.5:wetAmt;
   n.connect(w);w.connect(this.conv)},
@@ -2490,15 +2608,26 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
   s.connect(f);f.connect(g);this.out(g,pan);
   s.start(t);s.stop(t+dur+0.05)},
- // boots on whatever this room happens to be floored with
- step(room,pan){const F={tile:[1500,0.035,0.05],stone:[900,0.03,0.07],
-   wood:[520,0.045,0.08],wooddark:[470,0.045,0.08],carpet:[300,0.022,0.10],
-   concrete:[1100,0.03,0.06]};
+ // Boots: a heel strike and a toe roll, each a modal impact voiced by the
+ // surface — hollow boards, hard tile, dead carpet.
+ stepSpec(kind){switch(kind){
+  case"tile":return{modes:[[1180,0.5,0.10],[1870,0.32,0.07],[2640,0.2,0.05]],
+    noise:[3000,0.5,0.045,2.4],wet:0.65};
+  case"stone":return{modes:[[300,0.7,0.09],[620,0.34,0.06],[1150,0.18,0.04]],
+    noise:[1500,0.7,0.07,1.1],wet:0.7};
+  case"carpet":return{modes:[[150,0.5,0.06],[260,0.2,0.04]],
+    noise:[520,0.9,0.075,0.7],wet:0.25};
+  case"concrete":return{modes:[[480,0.55,0.07],[980,0.28,0.05]],
+    noise:[2100,0.6,0.05,1.6],wet:0.5};
+  case"wooddark":
+  case"wood":
+  default:return{modes:[[176,0.85,0.16,"sine"],[338,0.42,0.11],
+    [521,0.25,0.08],[880,0.12,0.05]],noise:[1300,0.45,0.05,1.8],wet:0.5}}},
+ step(room,pan){
   const k=(typeof ROOMFLOOR!=="undefined"&&ROOMFLOOR[room])||"wood";
-  const f=F[k]||F.wood;
-  this.hiss(f[2],f[1],f[0],pan,1.6);
-  if(k==="wood"||k==="wooddark")
-    this.osc(90+Math.random()*40,0.09,"triangle",0.02,-18,pan)},
+  const spec=this.stepSpec(k);
+  this.modal(spec,0.05,pan,0.10);
+  setTimeout(()=>this.modal(spec,0.028,pan,0.14),58+Math.random()*26)},
  thump(vol){this.osc(62,0.22,"sine",vol,-28)},
  // How loud is a thing at that tile for the people actually on site? Uses
  // the sim's own propagation: -1 per tile, -3 per closed door, walls block.
@@ -2509,6 +2638,29 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   for(const s of sim.squad){if(!s.mobile())continue;
     const v=heard[s.pos[0]+","+s.pos[1]]||0;if(v>best)best=v}
   return Math.min(1,best/n)},
+ // Impacts as a sum of decaying modes plus a noise transient — the standard
+ // physically-informed recipe, and far closer to a real surface than a beep.
+ modal(spec,vol,pan,spread){const C=this.ctx;
+  if(!C||this.muted||!spec||!spec.modes)return;
+  // a NaN slipping into an AudioParam kills the node graph for the rest of
+  // the shift, so nothing reaches the hardware unvetted
+  pan=Number.isFinite(pan)?Math.max(-1,Math.min(1,pan)):0;
+  vol=Number.isFinite(vol)?vol:0.05;
+  const t=C.currentTime;
+  const jitter=1+(Math.random()-0.5)*(spread==null?0.06:spread);
+  for(const m of spec.modes){
+    const o=C.createOscillator(),g=C.createGain();
+    o.type=m[3]||"sine";
+    o.frequency.setValueAtTime(m[0]*jitter,t);
+    if(m[4])o.frequency.exponentialRampToValueAtTime(
+      Math.max(30,m[0]*jitter*m[4]),t+m[2]);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol*m[1]),t+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+m[2]);
+    o.connect(g);this.out(g,pan,spec.wet==null?0.5:spec.wet);
+    o.start(t);o.stop(t+m[2]+0.05)}
+  if(spec.noise)this.hiss(spec.noise[2],vol*spec.noise[1],
+    spec.noise[0]*jitter,pan,spec.noise[3]||1.4)},
  bed(id,freq,q,type){const C=this.ctx;
   if(!C)return null;
   if(this.amb[id])return this.amb[id];
@@ -2573,15 +2725,24 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
  play(name,pos){const C=this.ctx;if(!C||this.muted)return;
   const pan=this.panOf(pos);
   switch(name){
-  case"collapse":this.osc(38,1.9,"sawtooth",0.13,-14,0,700);
-    this.hiss(1.6,0.10,180,0,0.5);
-    setTimeout(()=>this.hiss(0.6,0.06,900,0,0.7),260);break;
+  case"collapse":this.osc(36,2.0,"sawtooth",0.13,-13,0,600);
+    this.osc(53,1.6,"sine",0.09,-18,0);
+    this.hiss(1.8,0.10,170,0,0.45);
+    for(let i=0;i<7;i++)setTimeout(()=>            // masonry coming down
+      this.modal({modes:[[130+Math.random()*220,0.9,0.13],
+        [420+Math.random()*300,0.4,0.07]],noise:[900,0.8,0.09,0.8],wet:0.9},
+        0.05+Math.random()*0.05,(Math.random()-0.5)*1.4),
+      120+i*(160+Math.random()*220));
+    break;
   case"tap":this.osc(880,0.05,"triangle",0.025);break;
-  case"door":{const p2=pan;
-    this.hiss(0.34,0.045,240,p2,1.4);                  // the hinge complains
-    this.osc(150+Math.random()*60,0.30,"sawtooth",0.020,-52,p2,900);
-    setTimeout(()=>{this.osc(2100,0.035,"square",0.020,-600,p2);
-      this.hiss(0.05,0.03,3200,p2,2.2)},300);          // the latch
+  case"door":{
+    this.hiss(0.36,0.05,230,pan,1.2);                  // dry hinge
+    this.osc(148+Math.random()*70,0.34,"sawtooth",0.022,-58,pan,850);
+    setTimeout(()=>this.modal({modes:[[2100,0.6,0.03,"square"],
+      [3400,0.3,0.02]],noise:[4200,0.8,0.035,3]},0.05,pan),
+      300+Math.random()*60);                           // the latch drops
+    setTimeout(()=>this.modal({modes:[[95,0.9,0.28],[210,0.4,0.16]],
+      noise:[500,0.4,0.07,1]},0.05,pan),330);          // the leaf settles
     break}
   case"ev":{const g0=this.ghostTone();
     this.osc(g0*2+Math.random()*40,0.5,"sine",0.035,-160,pan);
@@ -2590,7 +2751,9 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   case"al":this.osc(196,0.3,"square",0.04,-40);break;
   case"prelude":this.osc(70,1.4,"sawtooth",0.09,-38);
     this.hiss(1.4,0.05,300);break;
-  case"strike":this.hiss(0.14,0.12,700);this.thump(0.12);break;
+  case"strike":this.modal({modes:[[92,1.0,0.30],[143,0.6,0.20],
+      [268,0.3,0.12]],noise:[700,0.9,0.13,0.9],wet:0.8},0.13,pan);
+    this.thump(0.10);break;
   case"down":this.osc(330,0.28,"sine",0.06,-110);
     setTimeout(()=>this.osc(220,0.5,"sine",0.06,-90),240);break;
   case"chant":this.osc(110,0.9,"sine",0.045);
