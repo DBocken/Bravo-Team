@@ -398,8 +398,10 @@ class Site{
     this.breakerOn=true;this.breakerLocked=0;this.furnaceOn=false;
     this.searchLeft={};for(const[k,v]of Object.entries(SEARCHES))this.searchLeft[k]=v.slice();
     this.saltLines={};this.lanterns=[];this.jammed=new Set();this.floorItems={};
+    this.rubble=new Set();
   }
-  walkable(p,ghost){const k=this.kind[key(p)];
+  walkable(p,ghost){if(this.rubble.has(key(p)))return false;
+    const k=this.kind[key(p)];
     if(k==="floor"||k==="van")return this.furn[key(p)]!=="tall"||!!ghost;
     if(k==="door")return this.doorOpen[key(p)]||!!ghost;return false}
   room(p){return this.roomOf[key(p)]}
@@ -696,7 +698,7 @@ class Sim{
     this.logLines=[];this.events=[];this.over=false;this.outcome=null;this.banished=false;
     this.gpos=this.contract.ghostStart.slice();this.noiseHeard=[];
     this.hunt=null;this.prelude=false;this.forceHunt=false;
-    this.hosted=false;this.quietUntil=0;this.marked=null;
+    this.hosted=false;this.quietUntil=0;this.marked=null;this.collapse=null;
     this.anchorFound=false;this.anchorRoom=null;this.anchorConfirmed=false;
     this.placed={};this.banked=0;this.inflight=[];this.interrupted=new Set();
     this.fragments=0;this.verifiedChallenge=false;
@@ -967,8 +969,12 @@ class Sim{
       if(this.hosted){this.hosted=false;this.alpha.pos=this.gpos.slice();
         this.log("* the Alpha collapses, breathing — the Dybbuk is driven out of its host.","ok")}
       this.log("* BANISHMENT. The "+GHOSTS[wid].name+" is dragged manifest to the Anchor "+
-        "and comes apart. The site goes quiet.","ok");
-      this.events.push({pos:this.contract.anchor.slice(),kind:"banish"})}
+        "and comes apart.","ok");
+      this.events.push({pos:this.contract.anchor.slice(),kind:"banish"});
+      // The entity was the only thing holding this place together.
+      this.collapse={t:0,limit:10};
+      this.log("!! THE ANCHOR BREAKS — and the house stops holding its breath. "+
+        "Get out. Take her with you.","al")}
     else this.backfire()}
   backfire(){const t=this.contract.trueGhost;const site=this.site;
     this.dreadAdd(15);
@@ -997,7 +1003,8 @@ class Sim{
     else if(t==="dybbuk"&&!this.hosted&&!this.alpha.rescued&&this.alpha.carriedBy==null){
       this.hosted=true;this.gpos=this.alpha.pos.slice()}
     if(this.huntCheck(25))this.prelude=true}
-  ghostPhase(){if(this.over||this.banished)return;
+  ghostPhase(){if(this.over)return;
+    if(this.banished){if(this.collapse)this.collapsePhase();return}
     this.events=[];
     if(this.prelude){this.prelude=false;
       this.hunt={phase:0,lastSeen:null,quiet:0,refuge:false,
@@ -1016,6 +1023,38 @@ class Sim{
         this.log("!! The Wrath answers — a Hunt regardless of Dread.","al")}
       else if(this.huntCheck())this.prelude=true}
     this.noiseHeard=[]}
+  collapsePhase(){const c=this.collapse,site=this.site,a=this.contract.anchor;
+    this.events=[];c.t++;
+    const r=c.t+1;
+    for(const k in site.roomOf){const p=k.split(",").map(Number);
+      if(site.room(p)==="Van"||site.rubble.has(k))continue;
+      if(cheb(p,a)>r)continue;
+      if(this.rng.random()<0.5){site.rubble.add(k);
+        this.events.push({pos:p,kind:"rubble"})}}
+    for(const nm of Object.keys(site.fixtureOn))
+      if(this.rng.random()<0.34)site.fixtureOn[nm]=false;
+    for(const s of this.squad){
+      if(!s.mobile())continue;
+      if(!site.rubble.has(key(s.pos)))continue;
+      s.hp-=2;this.loseComp(s,10);
+      let clear=false;
+      for(const[dx,dy]of D8){const q=[s.pos[0]+dx,s.pos[1]+dy];
+        if(site.walkable(q)){s.pos=q;if(s.carrying==="alpha")this.alpha.pos=q.slice();
+          clear=true;break}}
+      this.events.push({pos:s.pos.slice(),kind:"strike"});
+      this.log("!! the ceiling comes down on "+s.name+
+        (clear?" — they scramble clear (2 HP)":" — pinned (2 HP)"),"al");
+      if(s.hp<=0)this.down(s)}
+    const left=c.limit-c.t;
+    if(left>0)this.log("!! the site is coming apart — "+left+
+      " round"+(left===1?"":"s")+" before it goes.","al");
+    if(c.t>=c.limit){
+      const inside=this.squad.filter(s=>s.mobile()&&site.room(s.pos)!=="Van");
+      if(inside.length){
+        for(const s of inside){s.hp=0;this.down(s)}
+        this.log("!! THE ROOF GOES. Whoever was still inside is under it.","al");
+        this.over=true;this.outcome="collapsed"}
+      else{this.over=true;this.outcome="banished"}}}
   compEnvironment(){for(const s of this.squad){
       if(!s.mobile()||this.site.room(s.pos)==="Van")continue;
       if(this.site.lightLevel(s.pos,this.round)==="dark")this.loseComp(s,2);
@@ -1307,7 +1346,14 @@ class Sim{
       if(this.huntsSurvived){total+=60*this.huntsSurvived;
         lines.push("Hazard bonus ×"+this.huntsSurvived+": +"+60*this.huntsSurvived)}
       if(this.journal.clean()){total+=50;lines.push("Clean Journal: +50")}
-      if(this.verifiedChallenge){total+=250;lines.push("Verified Challenge/Filing: +250")}}
+      if(this.verifiedChallenge){total+=250;lines.push("Verified Challenge/Filing: +250")}
+      if(this.collapse&&this.collapse.t>0){total+=120;
+        lines.push("Cleared the collapse: +120")}
+      if(!this.alpha.rescued){total-=200;
+        lines.push("Alpha left on site (H&V notifies the family): -200")}}
+    else if(this.outcome==="collapsed"){
+      lines.push("The entity was banished — and the site took the crew.");
+      lines.push("Hazard pay only, held pending the inquiry: 0")}
     else if(this.outcome==="withdraw"){
       const tells=new Set(this.journal.entries.filter(e=>!e.struck).map(e=>e.atom)).size;
       if(tells>=2){total=base*mult*0.25;
@@ -1319,6 +1365,8 @@ class Sim{
     const falses=this.journal.falseEntries();
     if(falses.length)lines.push("(Debrief reveals "+falses.length+" FALSE journal "+
       (falses.length===1?"entry":"entries")+" — logged while Rattled.)");
+    if(this.outcome!=="collapsed"&&this.alpha.rescued&&this.collapse)
+      lines.push("(She walked out on your shoulder. Form 7-C: total loss.)");
     lines.push("Ground truth: the entity was a "+GHOSTS[this.contract.trueGhost].name+"."+
       (this.contract.misid?" Alpha's report was WRONG.":""));
     return[Math.round(total),lines]}
@@ -1476,6 +1524,31 @@ function makeSprite(txt,color,scale=0.66){
   const m=new THREE.SpriteMaterial({map:spriteTx(txt,color),transparent:true,
     depthWrite:false});
   const s=new THREE.Sprite(m);s.scale.set(scale,scale,1);return s}
+// A gobo for the headlamps: real torches never throw a clean disc.
+function cookieTex(){if(TEX.cookie)return TEX.cookie;
+  const c=document.createElement("canvas");c.width=c.height=128;
+  const g=c.getContext("2d");
+  const r=g.createRadialGradient(64,64,6,64,64,62);
+  r.addColorStop(0,"#ffffff");r.addColorStop(0.55,"#d8d2c4");
+  r.addColorStop(0.86,"#4a463e");r.addColorStop(1,"#000000");
+  g.fillStyle=r;g.fillRect(0,0,128,128);
+  g.globalCompositeOperation="multiply";
+  for(let i=0;i<16;i++){
+    g.fillStyle="rgba(0,0,0,"+(0.05+Math.random()*0.13)+")";
+    g.beginPath();g.arc(20+Math.random()*88,20+Math.random()*88,
+      3+Math.random()*16,0,7);g.fill()}
+  const t=new THREE.CanvasTexture(c);TEX.cookie=t;return t}
+// a two-tone sky/ground gradient so gloss has something to reflect
+function envTex(){if(TEX.env)return TEX.env;
+  const c=document.createElement("canvas");c.width=c.height=64;
+  const g=c.getContext("2d");
+  const lg=g.createLinearGradient(0,0,0,64);
+  lg.addColorStop(0,"#39485C");lg.addColorStop(0.5,"#1A2028");
+  lg.addColorStop(1,"#0E1216");
+  g.fillStyle=lg;g.fillRect(0,0,64,64);
+  const t=new THREE.CanvasTexture(c);
+  t.mapping=THREE.EquirectangularReflectionMapping;
+  TEX.env=t;return t}
 function glowTex(){if(TEX.glow)return TEX.glow;
   const c=document.createElement("canvas");c.width=64;c.height=64;
   const g=c.getContext("2d");
@@ -1602,7 +1675,7 @@ function renderPost(now){const P=R.post,rn=R.renderer;
   u.uDof.value=R.q>0?0.9:0.0;
   u.uTime.value=now*0.001;
   u.uDread.value=sim?Math.min(1,sim.dread/100):0;
-  const hunt=sim&&sim.hunt?1:(sim&&sim.prelude?0.55:0);
+  const hunt=sim&&sim.collapse?0.8:(sim&&sim.hunt?1:(sim&&sim.prelude?0.55:0));
   u.uHunt.value+=(hunt-u.uHunt.value)*0.12;
   u.uVig.value=0.60+u.uHunt.value*0.40;
   rn.setRenderTarget(null);rn.render(P.comp.scene,P.cam)}
@@ -1621,6 +1694,7 @@ function init3D(){
   scene.background=new THREE.Color(0x080B10);
   scene.fog=new THREE.FogExp2(0x080B10,0.021);
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,0.1,120);
+  scene.environment=envTex();
   scene.add(new THREE.AmbientLight(0x223040,0.34));
   scene.add(new THREE.HemisphereLight(0x46617E,0x1A1512,0.16));
   const moon=new THREE.DirectionalLight(0x8FA8C8,0.30);
@@ -1875,6 +1949,7 @@ function makeWorker(overall,hat,withLamp){
   lampDot.position.set(0,0.76,0.16);inner.add(lampDot);
   let lamp=null;
   if(withLamp){lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
+    lamp.map=cookieTex();
     lamp.position.set(0,0.78,0.1);
     const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
     inner.add(lt);lamp.target=lt;inner.add(lamp)}
@@ -2104,6 +2179,19 @@ function sceneSync(){if(!R||!sim)return;
   for(const[t,p,c]of markers){if(!seenAt(p))continue;
     const s=makeSprite(t,c,0.62);
     s.position.set(p[0]+0.5,1.0,p[1]+0.5);s.userData.bob=true;G.add(s)}
+  for(const rk of site.rubble){const p=rk.split(",").map(Number);
+    if(!seenAt(p))continue;
+    const rr2=RNG("rub:"+rk);
+    for(let i=0;i<3;i++){
+      const s2=0.16+rr2.random()*0.24;
+      const m=box(s2,s2*0.6,s2,0x4A443C,null,{roughness:1});
+      m.position.set(p[0]+0.2+rr2.random()*0.6,s2*0.3,p[1]+0.2+rr2.random()*0.6);
+      m.rotation.y=rr2.random()*3.1;G.add(m)}
+    const dustm=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+      new THREE.MeshBasicMaterial({color:0x6A6258,transparent:true,opacity:0.25,
+        depthWrite:false}));
+    dustm.rotation.x=-Math.PI/2;dustm.position.set(p[0]+0.5,0.03,p[1]+0.5);
+    G.add(dustm)}
   for(const[name,r]of Object.entries(ROOMS)){
     if(name!=="Van"&&(site.temp[name]??13)<=8){
       const w=r[2]-r[0]+1,d=r[3]-r[1]+1;
@@ -2176,6 +2264,13 @@ function frame(now){requestAnimationFrame(frame);
   R.ghostM.visible=gvis;
   R.ghostM.position.set(ga.x+0.5,
     0.55+(REDUCED?0:Math.sin(now*0.003)*0.08),ga.y+0.5);
+  if(gvis&&!REDUCED){const body=R.ghostM.children[0];
+    if(!body.userData.base)body.userData.base=body.scale.clone();
+    const b0=body.userData.base;
+    body.scale.set(b0.x*(1+Math.sin(now*0.0042)*0.10),
+      b0.y*(1+Math.sin(now*0.0031+1.7)*0.12),
+      b0.z*(1+Math.sin(now*0.0037+3.1)*0.08));
+    R.ghostM.rotation.y=now*0.0004}
   if(gvis&&!REDUCED)R.ghostM.userData.motes.forEach((m,i)=>{
     const a2=now*0.0016+i*Math.PI/2;
     m.position.set(Math.cos(a2)*0.55,0.15+Math.sin(now*0.002+i)*0.2,
@@ -2293,6 +2388,17 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
    const C=this.ctx=new(window.AudioContext||window.webkitAudioContext)();
    const master=this.master=C.createGain();
    master.gain.value=0.32;master.connect(C.destination);
+   // a room to play it in: convolution reverb from exponentially decaying
+   // noise — the standard procedural impulse response
+   const IRLEN=Math.floor(C.sampleRate*2.1);
+   const ir=C.createBuffer(2,IRLEN,C.sampleRate);
+   for(let ch=0;ch<2;ch++){const d2=ir.getChannelData(ch);
+     for(let i=0;i<IRLEN;i++){const t2=i/IRLEN;
+       d2[i]=(Math.random()*2-1)*Math.pow(1-t2,3.2)*(i<400?i/400:1)}}
+   const conv=this.conv=C.createConvolver();conv.buffer=ir;
+   const wet=this.wet=C.createGain();wet.gain.value=0.4;
+   const damp=C.createBiquadFilter();damp.type="lowpass";damp.frequency.value=2200;
+   conv.connect(damp);damp.connect(wet);wet.connect(master);
    // dread drone: detuned sines + filtered noise, gain follows the dial
    const g=this.droneG=C.createGain();g.gain.value=0;g.connect(master);
    const o1=this.o1=C.createOscillator();o1.type="sine";o1.frequency.value=47;
@@ -2321,7 +2427,15 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   if((sim.hunt||sim.prelude)&&!sim.over&&now>this._hb){
     this._hb=now+(sim.hunt?560:900);
     this.thump(0.09);setTimeout(()=>this.thump(0.055),150)}},
- osc(freq,dur,type,vol,glide){const C=this.ctx;
+ out(node,pan,wetAmt){const C=this.ctx;let n=node;
+  if(C.createStereoPanner){const pn=C.createStereoPanner();
+    pn.pan.value=Math.max(-1,Math.min(1,pan||0));n.connect(pn);n=pn}
+  n.connect(this.master);
+  const w=C.createGain();w.gain.value=wetAmt==null?0.5:wetAmt;
+  n.connect(w);w.connect(this.conv)},
+ panOf(pos){if(!pos||!R||!R.cam)return 0;
+  return Math.max(-1,Math.min(1,(pos[0]+0.5-R.cam.cx)/(R.cam.half*0.9)))},
+ osc(freq,dur,type,vol,glide,pan,muffle){const C=this.ctx;
   if(!C||this.muted)return;
   const o=C.createOscillator(),g=C.createGain(),t=C.currentTime;
   o.type=type||"sine";o.frequency.setValueAtTime(freq,t);
@@ -2330,26 +2444,49 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   g.gain.setValueAtTime(0.0001,t);
   g.gain.exponentialRampToValueAtTime(vol,t+0.02);
   g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  o.connect(g);g.connect(this.master);
+  o.connect(g);
+  let tail=g;
+  if(muffle){const f=C.createBiquadFilter();f.type="lowpass";
+    f.frequency.value=muffle;g.connect(f);tail=f}
+  this.out(tail,pan);
   o.start(t);o.stop(t+dur+0.05)},
- hiss(dur,vol,freq){const C=this.ctx;
+ hiss(dur,vol,freq,pan,q){const C=this.ctx;
   if(!C||this.muted)return;
   const s=C.createBufferSource();s.buffer=this.noiseBuf;
   const f=C.createBiquadFilter();f.type="bandpass";
-  f.frequency.value=freq||900;f.Q.value=0.8;
+  f.frequency.value=freq||900;f.Q.value=q||0.8;
   const g=C.createGain();const t=C.currentTime;
   g.gain.setValueAtTime(0.0001,t);
   g.gain.exponentialRampToValueAtTime(vol,t+0.03);
   g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  s.connect(f);f.connect(g);g.connect(this.master);
+  s.connect(f);f.connect(g);this.out(g,pan);
   s.start(t);s.stop(t+dur+0.05)},
+ // boots on whatever this room happens to be floored with
+ step(room,pan){const F={tile:[1500,0.035,0.05],stone:[900,0.03,0.07],
+   wood:[520,0.045,0.08],wooddark:[470,0.045,0.08],carpet:[300,0.022,0.10],
+   concrete:[1100,0.03,0.06]};
+  const k=(typeof ROOMFLOOR!=="undefined"&&ROOMFLOOR[room])||"wood";
+  const f=F[k]||F.wood;
+  this.hiss(f[2],f[1],f[0],pan,1.6);
+  if(k==="wood"||k==="wooddark")
+    this.osc(90+Math.random()*40,0.09,"triangle",0.02,-18,pan)},
  thump(vol){this.osc(62,0.22,"sine",vol,-28)},
- play(name){const C=this.ctx;if(!C||this.muted)return;
+ ghostTone(){const T={hantu:196,demon:104,mare:147,jinn:262,wraith:175,
+   yurei:233,poltergeist:311,banshee:392,revenant:131,shade:208,draugr:87,
+   dybbuk:156};
+  return (sim&&T[sim.contract.trueGhost])||220},
+ play(name,pos){const C=this.ctx;if(!C||this.muted)return;
+  const pan=this.panOf(pos);
   switch(name){
+  case"collapse":this.osc(38,1.9,"sawtooth",0.13,-14,0,700);
+    this.hiss(1.6,0.10,180,0,0.5);
+    setTimeout(()=>this.hiss(0.6,0.06,900,0,0.7),260);break;
   case"tap":this.osc(880,0.05,"triangle",0.025);break;
   case"door":this.osc(96,0.22,"sawtooth",0.035,-30);break;
-  case"ev":this.osc(520+Math.random()*360,0.5,"sine",0.035,-160);
-    this.hiss(0.4,0.02,1400);break;
+  case"ev":{const g0=this.ghostTone();
+    this.osc(g0*2+Math.random()*40,0.5,"sine",0.035,-160,pan);
+    this.osc(g0*3,0.35,"triangle",0.012,-60,pan);
+    this.hiss(0.4,0.02,1400,pan);break}
   case"al":this.osc(196,0.3,"square",0.04,-40);break;
   case"prelude":this.osc(70,1.4,"sawtooth",0.09,-38);
     this.hiss(1.4,0.05,300);break;
@@ -2358,9 +2495,11 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
     setTimeout(()=>this.osc(220,0.5,"sine",0.06,-90),240);break;
   case"chant":this.osc(110,0.9,"sine",0.045);
     this.osc(165,0.9,"sine",0.03);break;
-  case"banish":this.osc(440,1.6,"sine",0.07);
-    this.osc(660,1.6,"sine",0.05);
-    setTimeout(()=>this.osc(880,1.8,"sine",0.05),260);break;
+  case"banish":{const g1=this.ghostTone();
+    this.osc(g1,1.4,"sawtooth",0.05,-g1*0.6);
+    this.osc(440,1.8,"sine",0.06);this.osc(660,1.8,"sine",0.045);
+    setTimeout(()=>{this.osc(880,2.0,"sine",0.045);
+      this.osc(1320,1.6,"sine",0.02)},280);break}
   case"backfire":this.osc(233,0.9,"sawtooth",0.08,-90);
     this.osc(247,0.9,"sawtooth",0.06,-90);this.hiss(0.8,0.07,500);break}},
  toggle(){this.muted=!this.muted;
@@ -2420,7 +2559,7 @@ function logFlush(){const el=$("#log"),tk=$("#ticker");
     d.innerHTML='<span class="t">R'+String(l.r).padStart(2,"0")+"</span> ";
     const sp=document.createElement("span");sp.textContent=l.msg;
     if(l.cls)sp.className=l.cls;d.appendChild(sp);el.appendChild(d);
-    const snd=sndForLine(l);if(snd)SND.play(snd);
+    const snd=sndForLine(l);if(snd)SND.play(snd,sim.gpos);
     const t=document.createElement("div");t.textContent=l.msg;
     if(l.cls)t.className=l.cls;tk.appendChild(t);
     while(tk.children.length>3)tk.removeChild(tk.firstChild);
@@ -2525,7 +2664,9 @@ function explainTile(p){
     return"The ANCHOR — stand beside it, PLACE the rite reagents, then CHANNEL.";
   return null}
 function act([ok,msg]){toast(msg);
-  if(ok)SND.play(msg.includes("door")?"door":"tap");
+  if(ok){if(/moves|sprints|shoulders|carries/.test(msg)&&sel)
+      SND.step(sim.site.room(sel.pos),SND.panOf(sel.pos));
+    else SND.play(msg.includes("door")?"door":"tap",sel?sel.pos:null)}
   if(ok)sprint=false;renderAll();logFlush()}
 function renderActs(){const el=$("#acts");el.innerHTML="";
   const mk2=(label,fn,opts={})=>{const b=document.createElement("button");
@@ -2574,7 +2715,13 @@ function endTurn(){if(!sim||sim.over)return;
   if(sim.banished&&!wasBanished){flash();
     showBanner("BANISHED","var(--ecto)");
     popup("BANISHED","#7FD6B4",sim.contract.anchor,1.5);
-    camFollow(sim.contract.anchor)}
+    camFollow(sim.contract.anchor);
+    SND.play("banish");
+    setTimeout(()=>{showBanner("GET OUT","var(--blood)");
+      SND.play("collapse");R.shake=1.1},1500)}
+  else if(sim.collapse&&sim.collapse.t>0){
+    R.shake=Math.max(R.shake||0,0.55);SND.play("collapse");
+    if(sim.outcome==="collapsed")showBanner("THE ROOF GOES","var(--blood)")}
   else if(sim.hunt&&!wasHunt){showBanner("HUNT","var(--blood)");
     R.shake=Math.max(R.shake||0,0.35)}
   else if(sim.prelude&&!wasPrelude)showBanner("PRELUDE","var(--hazard)");
@@ -2600,6 +2747,14 @@ function renderChips(){const el=$("#chips");el.innerHTML="";
     d.onclick=()=>{sel=(sel===s?null:s);if(sel)camFollow(sel.pos);renderAll()};
     el.appendChild(d)}}
 function renderRail(){$("#round").textContent=sim.round;
+  if(sim.collapse){const c=sim.collapse,left=Math.max(0,c.limit-c.t);
+    $("#gfill").style.width=(100*left/c.limit)+"%";
+    $("#gfill").style.background="linear-gradient(90deg,#C8564C,#E0A050)";
+    $("#gval").textContent="COLLAPSE — "+left+" ROUND"+(left===1?"":"S")+" TO GET OUT";
+    $("#widlbl").textContent="BANISHED";
+    $("#ritelbl").textContent=sim.alpha.rescued?"Alpha aboard":"Alpha still inside";
+    $("#vignette").className="hunt";
+    return}
   $("#gfill").style.width=sim.dread+"%";
   let pct="";
   if(!sim.hunt&&!sim.prelude){const g=sim.contract.trueGhost;

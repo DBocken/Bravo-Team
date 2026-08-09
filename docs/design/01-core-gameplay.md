@@ -268,11 +268,27 @@ The **van zone** (3–4 exterior tiles at the site entrance) is outside the ghos
 
 | End state | Condition | Result |
 |---|---|---|
-| **Banished & clear** | Rite completed, all mobile specialists in van zone | Full success |
+| **Banished & clear** | Rite completed, all mobile specialists in van zone before the Collapse ends | Full success |
+| **Collapsed** | The Collapse (§10.5) finishes with anyone still inside | Entity banished, crew lost — hazard pay only |
 | **Withdraw** | Player extracts all mobile specialists without completing the Rite | Partial failure: 25% call-out fee if ≥2 Tells logged, else 0; Standing penalty; site stays on the board |
 | **Contract failed** | All specialists Downed | No fee; Standing penalty; on ≤Veteran the crew is recovered (hospital downtime, doc 06); on Nightmare+ they are gone |
 
 Specialists left behind (Downed, not carried out) on ≤Veteran are recovered for a **−200 Payout fee** and roster downtime.
+
+### 10.5 The Collapse — the site lets go
+
+The entity is what held the place together. When the Rite completes, the
+Anchor breaks and the building starts coming down: a **10-round countdown**
+replaces the Dread dial. Each round, rubble spreads outward from the Anchor
+(tiles become impassable), room lights fail, and anyone standing where the
+ceiling gives takes **2 HP** and is shoved clear. When the countdown expires,
+everyone still inside is lost.
+
+This is deliberate: it converts the Alpha rescue from a post-victory errand
+into a decision made *during* the contract, under the entity's pressure.
+Fetching the casualty early costs you tempo while the ghost still hunts;
+leaving it until after the banishment is a race you can lose. Debrief adds
+**+120 Cleared the collapse** and **−200 Alpha left on site**.
 
 ### 10.4 Scoring (v0.1 targets)
 
