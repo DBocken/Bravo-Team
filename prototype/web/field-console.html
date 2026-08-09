@@ -1358,6 +1358,9 @@ function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("on");
 let R=null;           // renderer bundle
 const TEX={},GEO={},MAT={};
 const SRC={};   // name -> source canvas (for normal-map derivation)
+function anisotropy(t){if(R&&R.renderer&&t)
+    t.anisotropy=Math.min(8,R.renderer.capabilities.getMaxAnisotropy());
+  return t}
 function tex(name,fn,rw=1,rh=1){if(TEX[name])return TEX[name];
   const c=document.createElement("canvas");c.width=128;c.height=128;
   fn(c.getContext("2d"),128,128);
@@ -1514,8 +1517,9 @@ const FRAG_BLUR=`uniform sampler2D tDiffuse;uniform vec2 dir;varying vec2 vUv;
   s+=texture2D(tDiffuse,vUv+dir*3.0).rgb*0.0540;
   s+=texture2D(tDiffuse,vUv+dir*4.0).rgb*0.0162;
   gl_FragColor=vec4(s,1.0);}`;
-const FRAG_COMP=`uniform sampler2D tScene,tBloom;
- uniform float uBloom,uTime,uDread,uHunt,uVig,uExposure;varying vec2 vUv;
+const FRAG_COMP=`uniform sampler2D tScene,tBloom,tSoft;
+ uniform float uBloom,uTime,uDread,uHunt,uVig,uExposure,uDof,uFocus,uBand;
+ varying vec2 vUv;
  vec3 aces(vec3 x){return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0);}
  void main(){vec2 d=vUv-0.5;
   float ca=0.0022*uHunt;                       // hunts fray the image
@@ -1523,6 +1527,8 @@ const FRAG_COMP=`uniform sampler2D tScene,tBloom;
   col.r=texture2D(tScene,vUv+d*ca).r;
   col.g=texture2D(tScene,vUv).g;
   col.b=texture2D(tScene,vUv-d*ca).b;
+  float band=smoothstep(uBand,uBand+0.30,abs(vUv.y-uFocus));
+  col=mix(col,texture2D(tSoft,vUv).rgb,band*uDof);
   col+=texture2D(tBloom,vUv).rgb*uBloom;
   float lum=dot(col,vec3(0.2126,0.7152,0.0722));
   col=mix(col,vec3(lum),0.10+0.22*uDread);     // dread drains the color
@@ -1548,13 +1554,18 @@ function buildPost(W,H){
   const w=Math.floor(W*px),h=Math.floor(H*px);
   const bw=Math.max(2,Math.floor(w/2)),bh=Math.max(2,Math.floor(h/2));
   const P={cam:new THREE.OrthographicCamera(-1,1,1,-1,0,1),
-    rtScene:makeRT(w,h,true),rtA:makeRT(bw,bh),rtB:makeRT(bw,bh),bw,bh};
+    rtScene:makeRT(w,h,true),rtA:makeRT(bw,bh),rtB:makeRT(bw,bh),
+    rtD:makeRT(bw,bh),rtE:makeRT(bw,bh),bw,bh};
   P.bright=fsPass(FRAG_BRIGHT,{tDiffuse:{value:P.rtScene.texture},
     threshold:{value:0.80},knee:{value:0.28}});
   P.blur=fsPass(FRAG_BLUR,{tDiffuse:{value:null},dir:{value:new THREE.Vector2()}});
+  P.copy=fsPass(FRAG_BLUR,{tDiffuse:{value:null},
+    dir:{value:new THREE.Vector2()}});
   P.comp=fsPass(FRAG_COMP,{tScene:{value:P.rtScene.texture},
-    tBloom:{value:P.rtB.texture},uBloom:{value:0.62},uTime:{value:0},
-    uDread:{value:0},uHunt:{value:0},uVig:{value:0.62},uExposure:{value:0.97}});
+    tBloom:{value:P.rtB.texture},tSoft:{value:P.rtD.texture},
+    uBloom:{value:0.62},uTime:{value:0},
+    uDread:{value:0},uHunt:{value:0},uVig:{value:0.62},uExposure:{value:0.97},
+    uDof:{value:0.9},uFocus:{value:0.52},uBand:{value:0.17}});
   return P}
 function degrade(){if(R.q<=0)return;
   if(R.q===2){R.px=1;R.renderer.setPixelRatio(1);
@@ -1571,16 +1582,24 @@ function renderPost(now){const P=R.post,rn=R.renderer;
   // bright pass
   P.bright.mat.uniforms.tDiffuse.value=P.rtScene.texture;
   rn.setRenderTarget(P.rtA);rn.render(P.bright.scene,P.cam);
-  // separable blur, two widening iterations
-  for(let i=0;i<2;i++){
+  // separable blur, three widening iterations for a softer, filmic glow
+  for(let i=0;i<3;i++){
     P.blur.mat.uniforms.tDiffuse.value=P.rtA.texture;
-    P.blur.mat.uniforms.dir.value.set((1.4+i*1.9)/P.bw,0);
+    P.blur.mat.uniforms.dir.value.set((1.3+i*2.4)/P.bw,0);
     rn.setRenderTarget(P.rtB);rn.render(P.blur.scene,P.cam);
     P.blur.mat.uniforms.tDiffuse.value=P.rtB.texture;
-    P.blur.mat.uniforms.dir.value.set(0,(1.4+i*1.9)/P.bh);
+    P.blur.mat.uniforms.dir.value.set(0,(1.3+i*2.4)/P.bh);
     rn.setRenderTarget(P.rtA);rn.render(P.blur.scene,P.cam)}
+  if(R.q>0){                       // plain soft copy for the tilt-shift band
+    P.copy.mat.uniforms.tDiffuse.value=P.rtScene.texture;
+    P.copy.mat.uniforms.dir.value.set(2.0/P.bw,0);
+    rn.setRenderTarget(P.rtE);rn.render(P.copy.scene,P.cam);
+    P.copy.mat.uniforms.tDiffuse.value=P.rtE.texture;
+    P.copy.mat.uniforms.dir.value.set(0,2.0/P.bh);
+    rn.setRenderTarget(P.rtD);rn.render(P.copy.scene,P.cam)}
   const u=P.comp.mat.uniforms;
   u.tBloom.value=P.rtA.texture;
+  u.uDof.value=R.q>0?0.9:0.0;
   u.uTime.value=now*0.001;
   u.uDread.value=sim?Math.min(1,sim.dread/100):0;
   const hunt=sim&&sim.hunt?1:(sim&&sim.prelude?0.55:0);
@@ -1671,6 +1690,7 @@ function buildStatic(){
     const kind=ROOMFLOOR[name]||"wood";
     floorKind(kind);
     const ft=TEX["f_"+kind].clone();ft.needsUpdate=true;ft.repeat.set(w,d);
+    anisotropy(ft);
     const nsrc=normalOf("f_"+kind);
     const nt=nsrc?nsrc.clone():null;
     if(nt){nt.needsUpdate=true;nt.repeat.set(w,d)}
@@ -1907,6 +1927,41 @@ function updateFog(vis){const {data,tex}=R.fog,W=sim.site.w,H=sim.site.h;
     data[((H-1-y)*W+x)*4+3]=Math.round((1-Math.max(0,Math.min(1,v)))*236)}
   tex.needsUpdate=true}
 function seenAt(p){return R.seen&&R.seen[p[1]*sim.site.w+p[0]]}
+// The beam you actually read from above: a ground-projected cone, clipped by
+// the same visibility texture the fog uses, so light never crosses a wall.
+function sectorGeo(radius,halfAngle,seg){
+  const pos=[],uv=[];
+  for(let i=0;i<seg;i++){
+    const a0=-halfAngle+2*halfAngle*i/seg,a1=-halfAngle+2*halfAngle*(i+1)/seg;
+    pos.push(0,0,0, Math.sin(a0)*radius,0,Math.cos(a0)*radius,
+             Math.sin(a1)*radius,0,Math.cos(a1)*radius);
+    uv.push(0,0.5, 1,i/seg, 1,(i+1)/seg)}
+  const g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2));
+  return g}
+const BEAM_VERT=`varying vec2 vUv;varying vec3 vW;
+ void main(){vUv=uv;vec4 w=modelMatrix*vec4(position,1.0);vW=w.xyz;
+  gl_Position=projectionMatrix*viewMatrix*w;}`;
+const BEAM_FRAG=`uniform vec3 uColor;uniform float uTime,uInt,uW,uH;
+ uniform sampler2D tFog;varying vec2 vUv;varying vec3 vW;
+ void main(){
+  float d=vUv.x;
+  float ang=abs(vUv.y-0.5)*2.0;
+  float a=pow(1.0-d,2.7)*0.85;
+  a*=pow(1.0-ang,2.2);
+  a*=0.88+0.12*sin(uTime*2.3+d*9.0);
+  float vis=1.0-texture2D(tFog,vec2(vW.x/uW,1.0-vW.z/uH)).a/0.926;
+  a*=smoothstep(0.12,0.55,vis);
+  gl_FragColor=vec4(uColor*a*uInt,a*uInt);}`;
+function makeBeam(){
+  const m=new THREE.Mesh(sectorGeo(7.0,0.62,26),
+    new THREE.ShaderMaterial({vertexShader:BEAM_VERT,fragmentShader:BEAM_FRAG,
+      uniforms:{uColor:{value:new THREE.Color(0xE8C489)},uTime:{value:0},
+        uInt:{value:0.62},uW:{value:24},uH:{value:18},tFog:{value:null}},
+      transparent:true,depthWrite:false,side:THREE.DoubleSide,
+      blending:THREE.AdditiveBlending}));
+  m.position.y=0.07;m.renderOrder=4;return m}
 function buildUnits(){const G=R.unitG;
   while(G.children.length)G.remove(G.children[0]);
   R.units={};
@@ -1923,8 +1978,9 @@ function buildUnits(){const G=R.unitG;
       new THREE.MeshStandardMaterial({color:0xC9C4B8,roughness:0.8}));
     burden.rotation.z=Math.PI/2.3;burden.position.set(0.05,0.86,-0.14);
     burden.castShadow=true;burden.visible=false;inner.add(burden);
+    const beam=makeBeam();inner.add(beam);
     R.unitG.add(grp);
-    R.units[s.name]={grp,inner,mats,ring,tag,burden,lamp:w.lamp,
+    R.units[s.name]={grp,inner,mats,ring,tag,burden,lamp:w.lamp,beam,
       dir:Math.PI,pop:0,px:null,pz:null}}
   // ghost: identity per 02 §6 — color, bulk, bearing
   const gv=GHOSTVIS[sim.contract.trueGhost]||{c:0x7FD6B4,s:1,tall:false};
@@ -2141,6 +2197,17 @@ function frame(now){requestAnimationFrame(frame);
     o.position.y=1.0+Math.sin(now*0.0028+o.position.x)*0.07});
   if(R.dust&&!REDUCED){R.dust.position.y=Math.sin(now*0.00035)*0.1;
     R.dust.position.x=Math.sin(now*0.00021)*0.35}
+  for(const s of sim.squad){const u=R.units[s.name];if(!u||!u.beam)continue;
+    const on=s.mobile()&&!s.hidden;
+    u.beam.visible=on;
+    if(on){const uf=u.beam.material.uniforms;
+      uf.uTime.value=now*0.001;
+      uf.tFog.value=R.fog?R.fog.tex:null;
+      uf.uW.value=sim.site.w;uf.uH.value=sim.site.h;
+      uf.uInt.value=(R.q>0?0.62:0.5)*(sel===s?1.15:0.9)}}
+  if(!REDUCED)for(const nm in R.roomLights){const L=R.roomLights[nm];
+    const f=Math.sin(now*0.011+nm.length*2.1)*Math.sin(now*0.0037+nm.length);
+    L.intensity=1.35*(0.86+0.14*f)*(1-0.25*(sim.dread/100))}
   SND.update(now);
   // floating world-space popups
   R.pops=(R.pops||[]).filter(p=>{const age=(now-p.t0)/1100;
