@@ -1779,6 +1779,17 @@ function init3D(){
   renderer.outputEncoding=THREE.LinearEncoding;   // composite does the grade
   renderer.toneMapping=THREE.NoToneMapping;
   host.appendChild(renderer.domElement);
+  // survive a GPU reset: preventDefault on loss lets three restore its own
+  // programs when the context comes back (tab switch, driver hiccup)
+  renderer.domElement.addEventListener("webglcontextlost",e=>{
+    e.preventDefault();toast("display reset — recovering…")});
+  renderer.domElement.addEventListener("webglcontextrestored",()=>{
+    if(sim)renderAll()});
+  // if a driver refuses one of our shaders, say so instead of going black
+  if(renderer.debug)renderer.debug.onShaderError=()=>{
+    if(!R||R._shErr)return;R._shErr=true;
+    renderer.shadowMap.enabled=false;
+    toast("graphics fallback: this GPU rejected a shader — shadows off")};
   const scene=new THREE.Scene();
   scene.background=new THREE.Color(0x080B10);
   scene.fog=new THREE.FogExp2(0x080B10,0.021);
@@ -2115,7 +2126,9 @@ function makeWorker(overall,hat,withLamp){
     M(withLamp?0xFFF2C8:0x6A6256,withLamp?0xFFE7A0:0),0,0.80,0.145));
   let lamp=null;
   if(withLamp){lamp=new THREE.SpotLight(0xFFE7B0,2.2,7.0,0.55,0.55,1.1);
-    lamp.map=cookieTex();
+    // NO cookie texture here: SpotLight.map is fresh in r147 and fails to
+    // link on a range of real GPU drivers, blacking out every lit material.
+    // The readable cone comes from the ground-projected beam shader anyway.
     lamp.position.set(0,0.82,0.1);
     const lt=new THREE.Object3D();lt.position.set(0,0.25,2.4);
     inner.add(lt);lamp.target=lt;inner.add(lamp)}
@@ -2415,7 +2428,13 @@ function sceneSync(){if(!R||!sim)return;
       m.emissiveIntensity=sim.hosted?0.9:0})}}
 // per-frame ---------------------------------------------------------------
 let lastT=0;
+// one bad frame must never kill the loop: catch, count, carry on
 function frame(now){requestAnimationFrame(frame);
+  try{frameBody(now)}catch(e){
+    R&&(R._ferr=(R._ferr||0)+1);
+    if(R&&R._ferr===1)console.error("frame error:",e);
+    if(R&&R._ferr===3)toast("renderer hiccup — recovering")}}
+function frameBody(now){
   if(!R||!sim)return;
   { // camera: ease toward target, apply frustum for current viewport
     const c=R.cam,e=REDUCED?1:0.14;
@@ -3130,6 +3149,7 @@ function renderActs(){const el=$("#acts");el.innerHTML="";
     if(opts.cost){const c=document.createElement("span");c.className="cost";
       c.textContent=opts.cost;b.appendChild(c)}
     b.disabled=!!opts.dis;b.onclick=fn;el.appendChild(b);return b};
+  try{
   if(sel&&sel.mobile()){
     const info=document.createElement("div");info.className="selinfo";
     const mv=sprint?7:(sel.carrying?3:(sel.cls==="Scout"?5:4));
@@ -3160,6 +3180,7 @@ function renderActs(){const el=$("#acts");el.innerHTML="";
     const[ready]=sim.riteReady();
     mk2("Channel",()=>act(sim.actChannel(sel)),{dis:!ready||sel.ap<2,cls:"on",cost:"2AP"});
   }
+  }catch(e){console.error("renderActs:",e)}   // End turn must always exist
   const left=sim.squad.filter(s=>s.mobile()).reduce((a,s)=>a+s.ap,0);
   const be=mk2("End turn",endTurn,{cls:"primary",
     cost:left>0?("◆"+left+" left"):null});be.id="btnEnd"}
@@ -3258,9 +3279,18 @@ function renderRail(){$("#round").textContent=sim.round;
   v.className=sim.hunt?"hunt":(sim.prelude?"prelude":"");
   if(sim.banished)v.className=""}
 function renderReport(){$("#report").textContent=sim.contract.report.join("\n")}
-function renderAll(){renderRail();renderChips();renderActs();renderReport();
-  if($("#journal").classList.contains("on"))renderJournal();
-  syncAnim();tutCheck();layoutHUD();sceneSync()}
+// one failing section must not blank the rest of the interface — each part
+// renders independently, and the first failure of a kind is surfaced
+function renderAll(){
+  const part=(name,fn)=>{try{fn()}catch(e){
+    console.error(name+":",e);
+    if(!renderAll._warned){renderAll._warned=true;
+      toast("interface error in "+name+" — "+(e&&e.message||e))}}};
+  part("rail",renderRail);part("chips",renderChips);part("acts",renderActs);
+  part("report",renderReport);
+  part("journal",()=>{if($("#journal").classList.contains("on"))renderJournal()});
+  part("anim",syncAnim);part("tutorial",tutCheck);part("layout",layoutHUD);
+  part("scene",sceneSync)}
 function showDebrief(){const[total,lines]=sim.debrief();
   let body="OUTCOME: "+String(sim.outcome).toUpperCase()+"\n\n"+lines.join("\n")+
     "\n\nPAYOUT: "+total;
@@ -3357,6 +3387,12 @@ $("#tutSkip").onclick=tutEnd;
 $("#btnTut").onclick=tutStart;
 addEventListener("resize",()=>{layoutHUD();
   if(R&&sim&&$("#play").classList.contains("on"))resize3D()});
+// any uncaught error becomes a visible line instead of a silent black screen
+addEventListener("error",e=>{if(!window._errShown){window._errShown=true;
+  try{toast("error: "+(e.message||e.type))}catch(_){}}});
+addEventListener("unhandledrejection",e=>{if(!window._errShown){
+  window._errShown=true;
+  try{toast("error: "+(e.reason&&e.reason.message||e.reason))}catch(_){}}});
 window._dbg={get sim(){return sim},get R(){return R},get snd(){return SND},tap:tapTile,end:endTurn,sel:(n)=>{sel=sim.spec(n);renderAll()}};
 newContract();
 })()}
