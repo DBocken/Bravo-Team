@@ -1,0 +1,1398 @@
+<title>Bravo Team — Field Console</title>
+<style>
+:root{
+  --night:#0C0F14; --panel:#151A22; --panel2:#101520; --line:#232B36;
+  --bone:#D6D0BF; --dim:#77808C; --hazard:#DFA457; --ecto:#7FD6B4;
+  --blood:#C8564C; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--night);color:var(--bone);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;min-height:100%}
+body{padding:0 0 40px}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:50;opacity:0;
+  background:radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(150,20,10,.45) 100%);
+  transition:opacity .6s}
+#vignette.prelude{opacity:.55}#vignette.hunt{opacity:.9}
+#banner{position:fixed;inset:0;display:flex;align-items:center;
+  justify-content:center;pointer-events:none;z-index:60;opacity:0}
+#banner span{font-family:var(--sans);font-weight:800;font-size:min(9vw,44px);
+  letter-spacing:.42em;padding-left:.42em;text-transform:uppercase;
+  color:var(--hazard);text-shadow:0 2px 18px rgba(0,0,0,.9)}
+#banner.show{animation:bannerIn 1.5s ease-out}
+@keyframes bannerIn{0%{opacity:0;transform:scale(1.06)}12%{opacity:1;transform:scale(1)}
+  70%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){#banner.show{animation:bannerFade 1.5s}
+  @keyframes bannerFade{0%{opacity:0}12%{opacity:1}70%{opacity:1}100%{opacity:0}}}
+#flash{position:fixed;inset:0;background:#EAF6EE;opacity:0;
+  pointer-events:none;z-index:55;transition:opacity 1.1s}
+#flash.on{opacity:.75;transition:opacity .06s}
+@media(prefers-reduced-motion:no-preference){
+  #vignette.hunt{animation:breathe 1.6s ease-in-out infinite alternate}
+  @keyframes breathe{from{opacity:.55}to{opacity:.95}}
+}
+.wrap{max-width:760px;margin:0 auto;padding:20px 14px;min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+.brand{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);
+  padding-bottom:10px;margin-bottom:12px;flex-wrap:wrap}
+.brand h1{font-size:15px;letter-spacing:.22em;text-transform:uppercase;color:var(--hazard)}
+.brand{display:block;border-bottom:1px solid var(--line)}
+.wordmark{font-size:min(11vw,52px) !important;letter-spacing:.3em !important;
+  font-weight:800;margin:6px 0 2px;
+  text-shadow:0 0 26px rgba(223,164,87,.28)}
+.tagline{font-family:var(--mono);font-size:13px;color:var(--dim);margin-bottom:12px}
+.tagline b{color:var(--ecto);font-weight:600}
+.brand .co{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.lbl{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+button{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  background:#1B222D;color:var(--bone);border:1px solid var(--line);border-radius:3px;
+  padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--hazard)}
+button:focus-visible{outline:2px solid var(--hazard);outline-offset:1px}
+button.primary{background:var(--hazard);border-color:var(--hazard);color:#17110A;font-weight:700}
+button.danger{border-color:var(--blood);color:var(--blood)}
+button:disabled{opacity:.35;cursor:default}
+button.on{border-color:var(--ecto);color:var(--ecto)}
+select,input{background:#1B222D;color:var(--bone);border:1px solid var(--line);
+  border-radius:3px;padding:8px;font-family:var(--mono);font-size:13px}
+/* briefing */
+#briefing .form{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  padding:18px 16px;font-family:var(--mono);font-size:13px;line-height:1.65;
+  max-width:640px;white-space:pre-wrap;position:relative;overflow:hidden}
+#briefing .form::after{content:"H&V INTERNAL — FORM 11-R";position:absolute;right:-38px;top:22px;
+  transform:rotate(32deg);font-size:10px;letter-spacing:.3em;color:var(--blood);
+  border:1px solid var(--blood);padding:3px 40px;opacity:.5}
+.setup{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:12px 0}
+.setup label{display:flex;flex-direction:column;gap:5px}
+.help{font-size:12.5px;color:var(--dim);line-height:1.6;max-width:640px;margin-top:12px}
+.help b{color:var(--bone);font-weight:600}
+/* status rail */
+.rail{display:flex;gap:14px;align-items:center;margin-bottom:10px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:12px}
+.rail .rid{color:var(--dim)}
+.gauge{flex:1;min-width:180px;position:relative;height:22px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:2px}
+.gauge .fill{position:absolute;inset:1px auto 1px 1px;border-radius:1px;
+  background:linear-gradient(90deg,#3E6B58,var(--hazard) 55%,var(--blood));transition:width .5s}
+.gauge .notch{position:absolute;top:0;bottom:0;width:1px;background:var(--night)}
+.gauge .val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:#0d0d0d;mix-blend-mode:plus-lighter;color:var(--bone);text-shadow:0 1px 2px #000}
+.wid{color:var(--ecto)}
+/* fullscreen game frame */
+body.locked{overflow:hidden}
+#play{position:fixed;inset:0;z-index:20;background:var(--night)}
+#play.on{display:block}
+#gl{position:absolute;inset:0}
+#gl canvas{display:block;width:100% !important;height:100% !important;touch-action:none}
+#hudTop{position:absolute;top:0;left:0;right:0;z-index:24;display:flex;gap:12px;
+  align-items:center;padding:8px 12px 14px;font-family:var(--mono);font-size:12px;
+  background:linear-gradient(rgba(8,11,16,.9),rgba(8,11,16,.55) 65%,transparent);
+  pointer-events:none}
+#hudTop .gauge{pointer-events:auto}
+#hudTop #btnMute{pointer-events:auto;margin-left:auto;padding:4px 8px;font-size:10px}
+#hudTop .hbrand{font-family:var(--sans);font-size:11px;letter-spacing:.22em;
+  color:var(--hazard);font-weight:700}
+@media(max-width:620px){#hudTop .hbrand,#hudTop #ritelbl{display:none}}
+/* RPG party column, left */
+#chips{position:absolute;left:8px;top:56px;bottom:70px;z-index:24;display:flex;
+  flex-direction:column;gap:8px;width:152px;overflow-y:auto;pointer-events:auto}
+@media(max-width:620px){#chips{width:120px}}
+.chip{background:rgba(19,24,32,.88);border:1px solid var(--line);border-radius:4px;
+  padding:7px 9px;cursor:pointer;position:relative;flex:none}
+.chip.sel{border-color:var(--hazard)}
+.chip .nm{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.06em;
+  text-transform:uppercase}
+.chip .cls{color:var(--dim);font-size:10px}
+.chip .bars{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+.bar{height:4px;background:#0A0D12;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;transition:width .4s}
+.bar.hp i{background:var(--blood)}.bar.cp i{background:var(--ecto)}
+.chip .ap{position:absolute;top:6px;right:8px;font-family:var(--mono);font-size:11px;color:var(--hazard)}
+.chip .tags{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:4px;min-height:13px}
+.chip .tags .warn{color:var(--blood)}
+.chip.downed{opacity:.45}
+/* action bar overlay, bottom */
+#acts{position:absolute;left:164px;right:56px;bottom:8px;z-index:24;display:flex;
+  gap:6px;flex-wrap:wrap;justify-content:center;pointer-events:auto}
+@media(max-width:620px){#acts{left:128px;right:50px}}
+#acts button{padding:8px 10px;font-size:11px;background:rgba(27,34,45,.9)}
+#acts button.primary{background:var(--hazard)}
+#acts button .cost{opacity:.55;font-size:9.5px;margin-left:4px}
+/* who is acting, and with how much left — read it without looking away */
+#acts .selinfo{display:flex;align-items:center;gap:7px;padding:7px 11px;
+  font-family:var(--mono);font-size:11px;background:rgba(8,11,16,.78);
+  border:1px solid var(--line);border-radius:3px;color:var(--bone);flex:none}
+#acts .selinfo b{color:var(--hazard);letter-spacing:.08em;font-weight:700}
+#acts .selinfo .ap{color:var(--hazard)}
+/* the running objective, top centre under the gauge */
+#objline{position:absolute;top:36px;left:50%;transform:translateX(-50%);z-index:23;
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--bone);
+  background:rgba(8,11,16,.74);border:1px solid var(--line);
+  border-left:3px solid var(--hazard);padding:3px 11px;border-radius:3px;
+  pointer-events:none;max-width:64vw;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+#objline:empty{display:none}
+#objline.warn{border-left-color:var(--blood);color:#F2C6BE}
+@media(max-width:620px){#objline{top:32px;font-size:10px;max-width:56vw}}
+/* right-edge panel toggles + drawer */
+#side{position:absolute;right:8px;top:56px;z-index:24;display:flex;
+  flex-direction:column;gap:6px}
+#side button{padding:8px 6px;font-size:10px;letter-spacing:.1em;
+  background:rgba(27,34,45,.9)}
+#side button.on{border-color:var(--hazard);color:var(--hazard)}
+#drawer{position:absolute;top:0;right:0;bottom:0;width:min(400px,94vw);z-index:45;
+  background:rgba(16,21,29,.97);border-left:1px solid var(--line);
+  transform:translateX(105%);transition:transform .22s;display:flex;
+  flex-direction:column}
+@media(prefers-reduced-motion:reduce){#drawer{transition:none}}
+#drawer.on{transform:none}
+#drawer .dhead{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 12px;border-bottom:1px solid var(--line);
+  font-size:11px;letter-spacing:.18em;color:var(--hazard)}
+#drawer .dhead button{padding:4px 9px}
+.pane{display:none;padding:10px 12px;font-family:var(--mono);font-size:12px;
+  line-height:1.7;overflow-y:auto;flex:1}
+.pane.on{display:block}
+/* ambient log ticker over the world — sits one strip above the toast slot */
+#ticker{position:absolute;left:164px;right:56px;z-index:22;
+  bottom:calc(var(--actsH,46px) + 48px);
+  font-family:var(--mono);font-size:11.5px;line-height:1.55;pointer-events:none;
+  display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+@media(max-width:620px){#ticker{left:128px;font-size:11px}}
+#ticker div{background:rgba(8,11,16,.72);padding:2px 8px;border-radius:3px;
+  max-width:100%;transition:opacity .8s;color:var(--bone)}
+#ticker .ev{color:var(--ecto)}#ticker .al{color:var(--blood)}#ticker .ok{color:var(--hazard)}
+#log .t{color:var(--dim)}
+#log .ev{color:var(--ecto)}#log .al{color:var(--blood)}#log .ok{color:var(--hazard)}
+#journal .entry{display:flex;gap:8px;padding:2px 0;cursor:pointer}
+#journal .entry .st{min-width:74px;text-align:right}
+#journal .entry .st.C{color:var(--ecto)}.entry .st.S{color:var(--dim)}
+#journal .entry.struck{text-decoration:line-through;opacity:.45}
+.cands{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.cand{border:1px solid var(--line);border-radius:3px;padding:6px 4px;text-align:center;
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;font-family:var(--sans)}
+.cand.dead{opacity:.25;cursor:default}
+.cand.wid{border-color:var(--ecto);color:var(--ecto)}
+.cand:not(.dead):hover{border-color:var(--hazard)}
+#report{white-space:pre-wrap}
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(5,7,10,.82);display:none;z-index:100;
+  align-items:center;justify-content:center;padding:16px}
+#modal.on{display:flex}
+#modal .box{background:var(--panel);border:1px solid var(--line);border-radius:5px;max-width:520px;
+  width:100%;padding:18px;max-height:88vh;overflow-y:auto}
+#modal h2{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--hazard);margin-bottom:12px}
+#modal .body{font-family:var(--mono);font-size:12.5px;line-height:1.8;white-space:pre-wrap}
+#modal .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:flex-end}
+/* tutorial */
+/* coach card: sits ABOVE the action bar, never over it; taps pass through
+   the panel itself so the world stays reachable */
+#tutcard{position:fixed;left:8px;right:8px;
+  bottom:calc(var(--actsH,46px) + 14px);z-index:40;
+  background:rgba(20,25,33,.78);-webkit-backdrop-filter:blur(7px);
+  backdrop-filter:blur(7px);
+  border:1px solid var(--hazard);border-left-width:3px;border-radius:5px;
+  max-width:600px;margin-inline:auto;padding:10px 13px;display:none;
+  box-shadow:0 8px 32px rgba(0,0,0,.45);pointer-events:none}
+#tutcard.on{display:block}
+#tutcard .skip,#tutcard .row button{pointer-events:auto}
+/* while training runs: shrink the party column and mute the ticker so the
+   coach card covers nothing */
+body.tut #chips{bottom:calc(var(--actsH,46px) + var(--tutH,96px) + 24px)}
+body.tut #ticker{display:none}
+#tutcard .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+#tutcard .step{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--hazard)}
+#tutcard .skip{font-size:11px;color:var(--dim);cursor:pointer;text-decoration:underline}
+#tutcard .tx{font-size:13px;line-height:1.6}
+#tutcard .row{display:flex;justify-content:flex-end;margin-top:8px}
+.tut-glow{outline:2px solid var(--hazard) !important;outline-offset:2px;position:relative}
+@media(prefers-reduced-motion:no-preference){
+  .tut-glow{animation:tutpulse 1.2s ease-in-out infinite alternate}
+  @keyframes tutpulse{from{outline-color:var(--hazard)}to{outline-color:#8a6532}}}
+/* action feedback lives in its own reserved strip directly above the action
+   bar (and above the coach card while training) — it never covers buttons,
+   ticker or tutorial, and it never eats a tap */
+.toast{position:fixed;left:50%;
+  bottom:calc(var(--actsH,46px) + var(--tutH,0px) + 16px);
+  transform:translateX(-50%);background:rgba(20,26,35,.92);
+  border:1px solid var(--hazard);color:var(--bone);padding:6px 14px;border-radius:4px;
+  font-family:var(--mono);font-size:12px;z-index:41;opacity:0;transition:opacity .25s;
+  max-width:min(560px,92vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  pointer-events:none}
+.toast.on{opacity:1}
+.screen{display:none}.screen.on{display:block}
+</style>
+
+<div id="vignette"></div>
+<div id="banner"><span id="bannerTx"></span></div>
+<div id="flash"></div>
+<div class="wrap">
+  <div class="brand">
+    <div>
+      <div class="co" style="letter-spacing:.3em">HALLOWAY &amp; VECK PARANORMAL ABATEMENT, LTD.</div>
+      <h1 class="wordmark">BRAVO TEAM</h1>
+      <div class="tagline">Alpha finds them. <b>Bravo finishes them.</b></div>
+    </div>
+  </div>
+
+  <div id="briefing" class="screen on">
+    <div class="setup">
+      <label><span class="lbl">Difficulty</span>
+        <select id="selDiff">
+          <option value="trainee">Trainee — annotated training file</option>
+          <option value="standard" selected>Standard — the report is correct</option>
+          <option value="veteran">Veteran — 15% misidentified</option>
+          <option value="nightmare">Nightmare — 35% misID, perma-death</option>
+          <option value="blackout">Blackout — no ID given</option>
+        </select></label>
+      <label><span class="lbl">Contract seed</span><input id="selSeed" type="number" value="7" style="width:90px"></label>
+      <button id="btnNew">File contract</button>
+    </div>
+    <div class="setup">
+      <button class="primary" id="btnTut" style="font-size:14px;padding:12px 18px">
+        ▶ Training shift — start here on your first night</button>
+    </div>
+    <div class="form" id="formText"></div>
+    <div class="setup"><button class="primary" id="btnDeploy">Deploy the Bravo shift</button></div>
+    <div class="help">
+      <b>How a shift runs.</b> Tap a specialist, then a glowing tile to move
+      (2 AP each, move = 1 AP). <b>Tiles only move you</b> — everything you
+      can operate shows up as a button in the action bar the moment you stand
+      beside it: doors, the furnace <b>F</b> (heats the site), the breaker
+      <b>B</b> (site power), searches, the salt line, <b>?</b> anchor
+      candidates, and the downed Alpha (<b>SHOULDER THE ALPHA</b> — no
+      tagging, you are the extraction). Your crew only sees where they are
+      facing: the headlamp beam in the dark, ordinary sight where a room
+      light is on. Confirm the entity from its Tells in the Journal, place
+      the rite reagents at the Anchor <b>A</b>, meet the rite's condition,
+      and Channel until the banishment banks. In-game, the <b>?</b> button
+      opens the full field guide.
+    </div>
+  </div>
+
+</div>
+<div id="play" class="screen">
+  <div id="gl"></div>
+  <div id="hudTop">
+    <span class="hbrand">BRAVO TEAM</span>
+    <span class="rid">R<span id="round">1</span></span>
+    <div class="gauge"><div class="fill" id="gfill"></div>
+      <div class="notch" style="left:25%"></div><div class="notch" style="left:50%"></div>
+      <div class="notch" style="left:75%"></div><div class="val" id="gval"></div></div>
+    <span class="hid">ID: <span class="wid" id="widlbl">—</span></span>
+    <span id="ritelbl" class="rid"></span>
+    <button id="btnMute" title="Sound">SND ON</button>
+  </div>
+  <div id="chips"></div>
+  <div id="acts"></div>
+  <div id="side">
+    <button data-t="log">LOG</button>
+    <button data-t="journal">JNL</button>
+    <button data-t="report">DOS</button>
+    <button data-t="guide">?</button>
+  </div>
+  <div id="drawer">
+    <div class="dhead"><span id="dtitle">LOG</span><button id="dclose">✕</button></div>
+    <div class="pane on" id="log"></div>
+    <div class="pane" id="journal"></div>
+    <div class="pane" id="report"></div>
+    <div class="pane" id="guide">
+      <b style="color:var(--hazard)">MAP</b><br>
+      <b>F</b> — the furnace. Stand beside it, tap it: heats the site room by
+      room. The Warming Rite needs a warm Anchor room; warmth also slows a
+      Hantu.<br>
+      <b>B</b> — the breaker. Stand beside it, tap it: site power on/off.
+      Lights need it; a Jinn feeds on it; the Smokeless Fire rite wants it
+      OFF.<br>
+      <b>?</b> — possible Anchor objects (after the hum). Stand beside one
+      and tap to inspect.<br>
+      <b>A</b> — the confirmed Anchor: place the rite reagents here, then
+      Channel within 1 tile.<br>
+      <b>Wardrobes / beds</b> — hiding spots (HIDE button when adjacent).<br>
+      <b>White dashes</b> — your salt lines. Tap one after the ghost crossed:
+      the prints identify it.<br>
+      <b>Amber dots</b> — dropped items, tap adjacent to recover. Amber
+      squares on furniture — searchable.<br>
+      <b>Figure in a red helmet</b> — the downed Alpha, lying where they
+      fell. Walk next to them, tap to shoulder them, carry them to the van.
+      No paperwork — you are the extraction.<br>
+      <br><b style="color:var(--hazard)">WHAT YOU CAN SEE</b><br>
+      The site is dark. You see what your crew's <b>headlamps</b> reach —
+      a cone in the direction each specialist last moved, blocked by walls —
+      and <b>any room whose light is on</b>. Switching a room light on
+      reveals it wholly, but costs Dread and tells the entity where you are.
+      Rooms you have already been through stay dimly remembered; anything
+      moving in them does not.<br>
+      <br><b style="color:var(--hazard)">CONTROLS</b><br>
+      Tap a card or token to select · tap a glowing tile to move · everything
+      you can use is a named button in the action bar · drag to pan · pinch or
+      wheel to zoom · SND toggles audio.<br>
+      Keys: <b>1/2/3</b> select a specialist · <b>TAB</b> cycles ·
+      <b>ENTER</b> ends the turn · <b>H</b> hide · <b>F</b> sprint ·
+      <b>ESC</b> closes panels.<br>
+      <br><b style="color:var(--hazard)">THE NIGHT</b><br>
+      Confirm the entity from its Tells (JNL) — the report can be wrong.
+      Place its rite reagents at A, meet the rite's condition, Channel until
+      it banks. Dread only rises; from 60 the dial shows Hunt odds. During a
+      Hunt: hide, break line of sight, or finish the rite — completion ends
+      the Hunt instantly. Then shoulder the Alpha and walk everyone to the
+      van.
+    </div>
+  </div>
+  <div id="ticker"></div>
+  <div id="objline"></div>
+</div>
+<div id="modal"><div class="box"><h2 id="mTitle"></h2><div class="body" id="mBody"></div><div class="row" id="mRow"></div></div></div>
+<div id="tutcard"><div class="hd"><span class="step" id="tutStep"></span>
+  <span class="skip" id="tutSkip">skip training</span></div>
+  <div class="tx" id="tutText"></div><div class="row" id="tutRow"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>/*THREE_LIB*/</script>
+<script>
+/*SIM-BEGIN*/
+"use strict";
+// ---------- seeded RNG (mulberry32 over a string hash) ----------
+function hstr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function RNG(seedStr){let a=hstr(seedStr);return{
+  next(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296},
+  random(){return this.next()},
+  randint(lo,hi){return lo+Math.floor(this.next()*(hi-lo+1))},
+  choice(arr){return arr[Math.floor(this.next()*arr.length)]},
+  sample(arr,n){const c=arr.slice(),out=[];while(out.length<n&&c.length)out.push(c.splice(Math.floor(this.next()*c.length),1)[0]);return out}
+}}
+// ---------- world ----------
+const MAP=[
+"########################",
+"#......#....#......#...#",
+"w......+....+......+...w",
+"#....t.#...H#..F.B.#H..#",
+"######+###+###+######+##",
+"#....#..........#......#",
+"#.H..+..........+......w",
+"#.T..#...t.t....#......#",
+"###########+############",
+"#......#.......#.......#",
+"w......+.......+.......w",
+"#..t.H.#.......#..T.t..#",
+"#......#.......#H......#",
+"###########+############",
+"         VVVVVV         ",
+"         VVVVVV         ",
+"         VVVVVV         ",
+"          VVVV          "];
+const ROOMS={Kitchen:[1,1,6,3],Pantry:[8,1,11,3],Mudroom:[13,1,18,3],Bedroom:[20,1,22,3],
+Cellar:[1,5,4,7],Hall:[6,5,15,7],Bathroom:[17,5,22,7],Living:[1,9,6,12],Foyer:[8,9,14,12],
+Study:[16,9,22,12],Van:[10,17,13,17]};
+const TEMPS={Kitchen:14,Pantry:12,Mudroom:12,Bedroom:10,Cellar:4,Hall:13,Bathroom:13,Living:15,Foyer:14,Study:13,Van:12};
+const FIXT={Kitchen:true,Pantry:false,Mudroom:false,Bedroom:false,Hall:true,Bathroom:false,Living:false,Foyer:true,Study:false};
+const WINDOWS=[[0,2],[23,2],[23,6],[0,10],[23,10]];
+const ANCHORS={hantu:[[1,5],[4,7]],demon:[[8,12],[14,9]],mare:[[22,1],[22,3]],jinn:[[13,1],[18,1]],
+wraith:[[17,9],[22,12]],yurei:[[22,5],[17,7]],poltergeist:[[1,12],[6,9]],banshee:[[1,10],[6,11]],
+revenant:[[8,1],[10,1]],shade:[[9,3],[8,3]],draugr:[[16,9],[21,12]],dybbuk:[[20,1],[21,3]]};
+const ALPHAS=[[21,2],[1,7],[20,12]];
+const SEARCHES={"5,3":["salt","votive","woven_effigy"],"2,7":["brazier_coals","lamp_oil","iron_filings"],
+"9,7":["salt","cleansing_bundle","votive"],"11,7":["votive","brazier_coals","salt"],
+"3,11":["votive","lamp_oil","woven_effigy"],"18,11":["grave_soil","grave_soil","iron_filings"],
+"20,11":["grave_soil","grave_soil","iron_filings"]};
+const FRAG_TILES=["18,11","20,11"];
+const FURNACE=[15,3],BREAKER=[17,3];
+const D8=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+const key=(p)=>p[0]+","+p[1];
+const cheb=(a,b)=>Math.max(Math.abs(a[0]-b[0]),Math.abs(a[1]-b[1]));
+
+class Site{
+  constructor(){
+    this.w=MAP[0].length;this.h=MAP.length;this.kind={};this.furn={};this.doorOpen={};this.windowOpen={};
+    WINDOWS.forEach(p=>this.windowOpen[key(p)]=false);
+    this.roomOf={};
+    MAP.forEach((row,y)=>{for(let x=0;x<row.length;x++){const ch=row[x],k=x+","+y;
+      if(ch==="#")this.kind[k]="wall";
+      else if(ch==="w")this.kind[k]="window";
+      else if(ch==="+"){this.kind[k]="door";this.doorOpen[k]=false}
+      else if(ch==="V")this.kind[k]="van";
+      else if(ch===" ")this.kind[k]="void";
+      else{this.kind[k]="floor";
+        if(ch==="T")this.furn[k]="tall";else if(ch==="t")this.furn[k]="low";
+        else if(ch==="H")this.furn[k]="hide"}}});
+    for(const[name,r]of Object.entries(ROOMS))for(let y=r[1];y<=r[3];y++)for(let x=r[0];x<=r[2];x++){
+      const k=x+","+y;if(this.kind[k]==="floor"||this.kind[k]==="van")this.roomOf[k]=name}
+    this.temp={...TEMPS};this.fixtureOn={...FIXT};this.fixtureDead={};
+    this.breakerOn=true;this.breakerLocked=0;this.furnaceOn=false;
+    this.searchLeft={};for(const[k,v]of Object.entries(SEARCHES))this.searchLeft[k]=v.slice();
+    this.saltLines={};this.lanterns=[];this.jammed=new Set();this.floorItems={};
+    this.rubble=new Set();
+  }
+  walkable(p,ghost){if(this.rubble.has(key(p)))return false;
+    const k=this.kind[key(p)];
+    if(k==="floor"||k==="van")return this.furn[key(p)]!=="tall"||!!ghost;
+    if(k==="door")return this.doorOpen[key(p)]||!!ghost;return false}
+  room(p){return this.roomOf[key(p)]}
+  roomTiles(name){return Object.keys(this.roomOf).filter(k=>this.roomOf[k]===name).map(k=>k.split(",").map(Number))}
+  blocksLos(p){const k=this.kind[key(p)];if(k==="wall")return true;
+    if(k==="door"&&!this.doorOpen[key(p)])return true;
+    return this.furn[key(p)]==="tall"}
+  los(a,b){let[x0,y0]=a;const[x1,y1]=b;const dx=Math.abs(x1-x0),dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1,sy=y0<y1?1:-1;let err=dx-dy;
+    for(;;){if(x0===x1&&y0===y1)return true;
+      if(!(x0===a[0]&&y0===a[1])&&this.blocksLos([x0,y0]))return false;
+      const e2=2*err;if(e2>-dy){err-=dy;x0+=sx}if(e2<dx){err+=dx;y0+=sy}}}
+  loudness(src,noise){const best={[key(src)]:0};const heap=[[0,src]];const out={};
+    while(heap.length){heap.sort((a,b)=>a[0]-b[0]);const[cost,p]=heap.shift();
+      if(cost>(best[key(p)]??1e9))continue;
+      if(noise-cost>=1)out[key(p)]=noise-cost;
+      for(const[dx,dy]of D8){const q=[p[0]+dx,p[1]+dy],qk=key(q),k=this.kind[qk];
+        if(!k||k==="wall"||k==="void")continue;
+        if(k==="window"&&!this.windowOpen[qk])continue;
+        let step=1;if(k==="door"&&!this.doorOpen[qk])step=4;
+        const nc=cost+step;if(noise-nc<0)continue;
+        if(nc<(best[qk]??1e9)){best[qk]=nc;heap.push([nc,q])}}}
+    return out}
+  powered(room){return this.breakerOn&&!!this.fixtureOn[room]}
+  lightLevel(p,rnd){const room=this.room(p);if(room==="Van")return"lit";
+    if(room&&this.powered(room)&&rnd>=(this.fixtureDead[room]||0))return"lit";
+    for(const lp of this.lanterns)if(cheb(p,lp)<=2)return"lit";
+    for(const[dx,dy]of D8){const q=[p[0]+dx,p[1]+dy],qr=this.room(q);
+      if(qr&&qr!=="Van"&&this.powered(qr)&&rnd>=(this.fixtureDead[qr]||0))return"dim";
+      if(this.lanterns.some(lp=>cheb(q,lp)<=2)&&this.walkable(q))return"dim"}
+    return"dark"}
+  tickTemp(ghostRoom,isHantu){for(const name of Object.keys(this.temp)){if(name==="Van")continue;
+    let t=this.temp[name];if(this.furnaceOn)t=Math.min(21,t+2);
+    const openW=WINDOWS.some(wp=>this.windowOpen[key(wp)]&&
+      [[0,-1],[-1,0],[1,0],[0,1]].some(([dx,dy])=>this.room([wp[0]+dx,wp[1]+dy])===name));
+    if(openW)t=Math.max(4,t-1);
+    if(isHantu&&name===ghostRoom&&!this.furnaceOn)t=Math.max(2,t-2);
+    this.temp[name]=t}}
+  path(start,goal,opts={}){const{blocked=[],ghost=false,walls=false,doorsOk=false}=opts;
+    if(key(start)===key(goal))return[];
+    const bl=new Set(blocked.map(key));const q=[start];const prev={[key(start)]:null};
+    while(q.length){const p=q.shift();
+      for(const[dx,dy]of D8){const n=[p[0]+dx,p[1]+dy],nk=key(n);
+        if(nk in prev)continue;if(n[0]<0||n[1]<0||n[0]>=this.w||n[1]>=this.h)continue;
+        if(walls){const k=this.kind[nk];if(!k||k==="void"||k==="van")continue}
+        else{const pass=this.walkable(n,ghost)||(doorsOk&&this.kind[nk]==="door");
+          if(!pass)continue;
+          if(ghost&&this.kind[nk]==="van")continue;
+          if(bl.has(nk)&&nk!==key(goal))continue}
+        prev[nk]=p;
+        if(nk===key(goal)){const out=[n];let cur=nk;
+          while(key(prev[cur])!==key(start)){out.push(prev[cur]);cur=key(prev[cur])}
+          return out.reverse()}
+        q.push(n)}}
+    return null}
+}
+// ---------- ghost data ----------
+const ATOM={whisper:"whispering with no source",single_throw:"a single object thrown",
+door_op:"a door moved on its own",opens_window:"a window thrown open from inside",
+cools_room:"the room measurably colder — frost crackle",
+warm_slow:"traces cross the warm room slowly (speed follows cold)",
+fast_cold:"fast traces through a cold room",frost_prints:"frost footprints stop at the salt line",
+temp_flat:"traces cross the warm room at full speed (cold means nothing to it)",
+claw_chip:"a claw chip on a lone specialist — outside any Hunt",
+salt_scatter:"the salt line is crossed and scattered, prints straight through",
+early_hunt:"Hunt eligibility far below Dread 60",flicker:"angry light flicker",
+light_kill:"a bulb killed outright — switch flipped, breaker untouched",
+dark_speed_link:"fast traces through darkness, detours around lit rooms",
+den_doors:"the same room's doors keep closing",
+flicker_cascade:"a flicker cascade down the corridor — a surge dash",
+battery_drain:"equipment batteries draining at double rate",
+power_slow:"with the power cut, the traces have gone sluggish",
+prints_normal:"ordinary prints across the salt line",
+translocation:"a displacement sigh — it is suddenly somewhere else entirely",
+salt_pristine:"it demonstrably crossed the salt line — the salt is pristine",
+wall_phase:"a trace that ends at a wall and resumes beyond it",
+aura_drain:"composure bleeding with no event on screen",
+water_sign:"taps running; water pooling",wet_prints:"wet bare footprints across the salt line",
+multi_throw:"two or more objects thrown in the same beat — a barrage",
+rattle_precursor:"loose objects vibrating a full turn before anything moves",
+keening:"a wail aimed at exactly one specialist — only they feel it",
+slow_creep:"traces crawling at a single tile per phase — nothing else is this slow",
+los_sprint:"it SAW someone and covered six tiles in a blink",
+drag_marks:"a continuous scored drag-line through the salt, no footprints",
+jammed_doors:"a door jammed shut with inhuman strength",
+thud:"heavy tread — thudding through the floor, clutter trembling",
+deep_prints:"deep pressed prints straight through the salt line",
+lone_manifest:"it showed itself — but only once its witness was alone",
+whisper_mimicry:"broken speech near the bodies: 'help — me — up'",
+possession:"a downed Alpha stands up and walks",
+furniture_topple:"heavy furniture toppled where it stood — not thrown, pushed",
+backfire_hantu:"BACKFIRE — Hearth-Theft: every flame snuffs; frost blooms across the Anchor room",
+backfire_demon:"BACKFIRE — Wrath: one silent beat, then the Hunt comes regardless of Dread",
+backfire_mare:"BACKFIRE — Total Dark: the breaker trips and every fixture dies",
+backfire_jinn:"BACKFIRE — Surge: the breaker slams ON and every fixture burns over-bright",
+backfire_wraith:"BACKFIRE — Walkthrough: it exits through the Anchor-room wall; crossed salt undisturbed",
+backfire_yurei:"BACKFIRE — Sorrow Wave: site-wide weeping from every direction at once",
+backfire_poltergeist:"BACKFIRE — Clutterstorm: every loose object in reach hurled outward at once",
+backfire_banshee:"BACKFIRE — Keening: a sustained shriek fixes on the enactor; the Mark has moved",
+backfire_revenant:"BACKFIRE — Dead Sprint: it locks eyes with the channeler and rushes, stopping one tile short",
+backfire_shade:"BACKFIRE — Absence: all activity ceases while the Dread keeps climbing",
+backfire_draugr:"BACKFIRE — Hoard-Call: every door on site slams and jams at once",
+backfire_dybbuk:"BACKFIRE — Host Lurch: it dives for the body and takes it"};
+const GHOSTS={
+hantu:{name:"Hantu",partner:"demon",thr:60,dur:3,saltRec:"frost_prints",crosses:false,
+ possible:["whisper","single_throw","door_op","opens_window","cools_room","warm_slow","fast_cold","frost_prints","backfire_hantu"],
+ rite:{name:"Warming Rite",len:3,reag:{brazier_coals:2,lamp_oil:1},special:"warm"}},
+demon:{name:"Demon",partner:"hantu",thr:40,dur:3,saltRec:"salt_scatter",crosses:true,
+ possible:["whisper","single_throw","door_op","flicker","temp_flat","claw_chip","salt_scatter","early_hunt","prints_normal","backfire_demon"],
+ rite:{name:"Naming",len:4,reag:{ritual_chalk:1,consecrated_water:1,censer_incense:1,name_fragment:2},special:"all_channel"}},
+mare:{name:"Mare",partner:"jinn",thr:60,dur:3,saltRec:"prints_normal",crosses:true,
+ possible:["whisper","single_throw","door_op","light_kill","dark_speed_link","den_doors","temp_flat","prints_normal","backfire_mare"],
+ rite:{name:"Illumination Rite",len:3,reag:{mirror_ward:1,lamp_oil:2},special:"lit"}},
+jinn:{name:"Jinn",partner:"mare",thr:60,dur:3,saltRec:"prints_normal",crosses:true,
+ possible:["whisper","single_throw","door_op","flicker","flicker_cascade","battery_drain","power_slow","temp_flat","prints_normal","backfire_jinn"],
+ rite:{name:"Smokeless Fire",len:3,reag:{brazier_coals:1,censer_incense:1},special:"dark"}},
+wraith:{name:"Wraith",partner:"yurei",thr:60,dur:3,saltRec:"salt_pristine",crosses:true,
+ possible:["whisper","single_throw","translocation","salt_pristine","wall_phase","temp_flat","backfire_wraith"],
+ rite:{name:"Binding",len:3,reag:{grave_soil:4},special:null}},
+yurei:{name:"Yurei",partner:"wraith",thr:65,dur:3,saltRec:"wet_prints",crosses:true,
+ possible:["whisper","door_op","water_sign","aura_drain","wet_prints","temp_flat","backfire_yurei"],
+ rite:{name:"Sealing",len:3,reag:{ritual_chalk:1,consecrated_water:1,votive:2},special:"manifest_t2"}},
+poltergeist:{name:"Poltergeist",partner:"dybbuk",thr:60,dur:3,saltRec:"prints_normal",crosses:true,
+ possible:["whisper","single_throw","door_op","multi_throw","rattle_precursor","temp_flat","prints_normal","backfire_poltergeist"],
+ rite:{name:"Stillness Rite",len:2,reag:{salt:3,iron_filings:3},special:null}},
+banshee:{name:"Banshee",partner:"shade",thr:55,dur:3,saltRec:"prints_normal",crosses:true,
+ possible:["whisper","single_throw","door_op","keening","temp_flat","prints_normal","backfire_banshee"],
+ rite:{name:"Sever the Bond",len:3,reag:{woven_effigy:1,votive:2},special:"marked_near"}},
+revenant:{name:"Revenant",partner:"draugr",thr:60,dur:4,saltRec:"drag_marks",crosses:true,
+ possible:["whisper","single_throw","slow_creep","los_sprint","drag_marks","temp_flat","backfire_revenant"],
+ rite:{name:"Reburial",len:3,reag:{grave_soil:2,consecrated_water:1},special:null}},
+shade:{name:"Shade",partner:"banshee",thr:85,dur:2,saltRec:"prints_normal",crosses:true,
+ possible:["whisper","single_throw","lone_manifest","temp_flat","prints_normal","backfire_shade"],
+ rite:{name:"Lone Vigil",len:4,reag:{votive:3,cleansing_bundle:1},special:"lone"}},
+draugr:{name:"Draugr",partner:"revenant",thr:60,dur:5,saltRec:"deep_prints",crosses:true,
+ possible:["whisper","door_op","jammed_doors","thud","furniture_topple","deep_prints","temp_flat","backfire_draugr"],
+ rite:{name:"Re-interment",len:3,reag:{grave_soil:2,iron_filings:2},special:null}},
+dybbuk:{name:"Dybbuk",partner:"poltergeist",thr:60,dur:3,saltRec:"prints_normal",crosses:true,
+ possible:["whisper","single_throw","door_op","whisper_mimicry","possession","temp_flat","prints_normal","backfire_dybbuk"],
+ rite:{name:"Exorcism",len:3,reag:{votive:4,consecrated_water:1,cleansing_bundle:1},special:null}}};
+const GKEYS=Object.keys(GHOSTS);
+const RNAME={salt:"Salt",lamp_oil:"Lamp Oil",brazier_coals:"Brazier Coals",censer_incense:"Censer Incense",
+ritual_chalk:"Ritual Chalk",consecrated_water:"Consecrated Water",mirror_ward:"Mirror Ward",
+grave_soil:"Grave Soil",votive:"Votive Candles",cleansing_bundle:"Cleansing Bundle",
+name_fragment:"Name-Fragment",lantern:"Lantern",iron_filings:"Iron Filings",woven_effigy:"Woven Effigy"};
+const CRATE=["ritual_chalk","consecrated_water","censer_incense","mirror_ward","salt","salt",
+"cleansing_bundle","cleansing_bundle","votive","votive","lantern"];
+const DIFF={trainee:{misid:0,mult:.5,perma:false,blackout:false,trainee:true},
+standard:{misid:0,mult:1,perma:false,blackout:false},
+veteran:{misid:.15,mult:1.5,perma:false,blackout:false},
+nightmare:{misid:.35,mult:2.25,perma:true,blackout:false},
+blackout:{misid:0,mult:3,perma:true,blackout:true}};
+const consistent=(g,atoms)=>atoms.every(a=>GHOSTS[g].possible.includes(a));
+const candidatesOf=(atoms)=>GKEYS.filter(g=>consistent(g,atoms));
+const discriminates=(a,nu,old)=>GHOSTS[nu].possible.includes(a)&&!GHOSTS[old].possible.includes(a);
+// ---------- report text ----------
+const LOGLINES={
+hantu:[["02:12 cold pocket in the lower rooms — thermometer bottomed out",null],
+ ["02:31 activity fastest wherever it's coldest","fast_cold"],
+ ["02:44 window in the north room standing open, again","opens_window"],
+ ["03:05 no light interference logged all night",null]],
+demon:[["01:58 opened up on us hard — earliest activity spike I've logged",null],
+ ["02:20 something raked P.'s arm in the study. drew blood","claw_chip"],
+ ["02:36 salt line in the hall crossed like it wasn't there","salt_scatter"],
+ ["02:51 flickers when it's angry. it is often angry","flicker"]],
+mare:[["02:02 bulbs popping one by one down the corridor","light_kill"],
+ ["02:19 it will not enter the lit kitchen","dark_speed_link"],
+ ["02:40 bedroom doors keep drifting shut","den_doors"],
+ ["02:55 breaker itself untouched — it's the fixtures",null]],
+jinn:[["02:07 lights strobing in sequence down the hall — fast mover behind it","flicker_cascade"],
+ ["02:25 both torch packs at half charge already","battery_drain"],
+ ["02:41 killed the generator: site went quiet, activity crawled","power_slow"],
+ ["02:58 not one bulb actually dead. flickers only",null]],
+wraith:[["02:09 trace pinged in the study, then through the wall into the hall","wall_phase"],
+ ["02:27 it was at the far end of the site one minute later. no path","translocation"],
+ ["02:45 salt across the doorway untouched — and it crossed, we watched","salt_pristine"],
+ ["03:01 never once used a door",null]],
+yurei:[["02:15 J. came out of the bathroom shaking. nothing on the tape","aura_drain"],
+ ["02:33 taps running again. floor's soaked","water_sign"],
+ ["02:50 all activity inside the same few rooms — it doesn't range",null],
+ ["03:07 not a single object thrown all night",null]],
+poltergeist:[["02:05 three plates airborne AT ONCE. three","multi_throw"],
+ ["02:22 the junk room is a warzone, the tidy rooms are silent",null],
+ ["02:39 cutlery drawer buzzing a full minute before it blew","rattle_precursor"],
+ ["02:56 it works the rooms, not us — never came at anyone",null]],
+banshee:[["02:03 it's fixed on M. — every event lands on her, nobody else","keening"],
+ ["02:24 wail again. only M. doubled over, we felt nothing","keening"],
+ ["02:47 it walked PAST me to get to her",null],
+ ["03:02 rest of us might as well be furniture",null]],
+revenant:[["02:11 slowest trace I've ever logged. one meter a minute, maybe","slow_creep"],
+ ["02:29 D. rounded a corner into its eyeline. it CLOSED, fast","los_sprint"],
+ ["02:48 no prints — a single scored drag-line in the dust","drag_marks"],
+ ["03:04 lights, doors, temperature: all clean. it only wants us",null]],
+shade:[["02:08 site went dead quiet the moment we grouped up",null],
+ ["02:26 K. saw it in the pantry — alone. it was gone when I got there","lone_manifest"],
+ ["02:44 activity keeps drifting to whichever wing we're not in",null],
+ ["03:00 quietest hostile I've ever filed. barely an event log",null]],
+draugr:[["02:06 mudroom door jammed like it was welded. took both of us","jammed_doors"],
+ ["02:23 heavy tread through the floor. shelves trembling","thud"],
+ ["02:41 everything happens inside the same stretch of rooms",null],
+ ["02:57 prints in the salt an inch deep. straight through","deep_prints"]],
+dybbuk:[["02:09 whispers by the downed crew — half-words, like speech","whisper_mimicry"],
+ ["02:31 I swear the body had MOVED when we came back",null],
+ ["02:49 single throws only, soft ones. it's not the objects it wants",null],
+ ["03:05 it keeps circling the stretcher room",null]]};
+const THREADS={"hantu|demon":"02:58 opened up on us before second sweep — punchy for a cold one",
+"demon|hantu":"02:58 for all that fury it never once crossed our salt",
+"mare|jinn":"02:58 funny thing — not one bulb actually died, just flickers",
+"jinn|mare":"02:58 generator was off an hour and it never slowed down",
+"wraith|yurei":"02:58 salt by the door came up wet. prints, almost",
+"yurei|wraith":"02:58 J. swears it crossed the hallway without touching the wet floor",
+"revenant|draugr":"02:58 never once saw it leave that wing, sprint or no sprint",
+"draugr|revenant":"02:58 odd — it followed D. clear across the site once",
+"shade|banshee":"02:58 quiet, sure, but K. got hit through a full huddle",
+"banshee|shade":"02:58 the 'fixation' went silent every time we bunched up",
+"poltergeist|dybbuk":"02:58 for all the racket, never two objects at once",
+"dybbuk|poltergeist":"02:58 it hurled half the kitchen and ignored the stretcher room"};
+// ---------- journal ----------
+class Journal{
+  constructor(claimed){this.entries=[];this.claimed=claimed;this.workingId=claimed;this.challenges=0}
+  log(turn,obs,atom,hiddenFalse=false,instrument=false){
+    const e={turn,obs,atom,text:ATOM[atom]||atom,state:instrument?"Confirmed":"Suspected",
+      hiddenFalse,instrument,struck:false};
+    this.entries.push(e);
+    if(!instrument){const live=this.entries.filter(x=>x.atom===atom&&!x.struck);
+      if(live.length>=2)live.forEach(x=>x.state="Confirmed")}
+    return e}
+  strike(i){if(this.entries[i])this.entries[i].struck=!this.entries[i].struck;this.refilter()}
+  refilter(){const counts={};
+    for(const e of this.entries)if(!e.struck&&!e.instrument)counts[e.atom]=(counts[e.atom]||0)+1;
+    for(const e of this.entries)if(!e.instrument)e.state=(counts[e.atom]>=2&&!e.struck)?"Confirmed":"Suspected"}
+  confirmed(){return[...new Set(this.entries.filter(e=>e.state==="Confirmed"&&!e.struck).map(e=>e.atom))].sort()}
+  candidates(){return candidatesOf(this.confirmed())}
+  verificationAtoms(nu,old){if(old==null)
+      return this.candidates().length===1&&this.candidates()[0]===nu?this.confirmed():[];
+    return this.confirmed().filter(a=>discriminates(a,nu,old))}
+  challenge(nu){const old=this.workingId;
+    const backfire=this.confirmed().includes("backfire_"+nu);
+    const verified=backfire||this.verificationAtoms(nu,old).length>=2;
+    const fee=this.challenges>=1?50:0;this.challenges++;this.workingId=nu;
+    return{fee,verified}}
+  falseEntries(){return this.entries.filter(e=>e.hiddenFalse)}
+  clean(){return!this.entries.some(e=>e.hiddenFalse&&!e.struck)}
+}
+// ---------- contract ----------
+class Contract{
+  constructor(seed,difficulty,forceMisid=null,forceGhost=null){
+    this.seed=seed;this.difficulty=difficulty;const cfg=DIFF[difficulty];
+    const rng=RNG("contract:"+seed);
+    this.trueGhost=forceGhost||rng.choice(GKEYS);
+    const misid=forceMisid!=null?forceMisid:rng.random()<cfg.misid;
+    if(cfg.blackout){this.claimed=null;this.misid=false}
+    else if(misid){this.claimed=GHOSTS[this.trueGhost].partner;this.misid=true}
+    else{this.claimed=this.trueGhost;this.misid=false}
+    this.anchor=rng.choice(ANCHORS[this.trueGhost]);
+    this.alphaPos=rng.choice(ALPHAS);
+    this.ghostStart=rng.choice(ANCHORS[this.trueGhost]);
+    this.report=this.author(rng,cfg)}
+  author(rng,cfg){const L=[];
+    const site=new Site();
+    if(cfg.blackout){L.push("H&V DARK SHEAF — no Form 11-R was ever filed.");
+      L.push("Dispatch memo: crew of 3 deployed / 2 returned. One member still on site.");
+      for(const[t]of rng.sample(LOGLINES[this.trueGhost],2))L.push('  fragment: "'+t+'"');
+      L.push("File the ID before Enact — there is no claim to trust.");return L}
+    if(cfg.trainee){
+      L.push("H&V FORM 11-R — TRAINING FILE — Claimed Entity: "+
+        GHOSTS[this.claimed].name.toUpperCase());
+      L.push("Confidence: Certified (Farrow oversight). This report is correct.");
+      for(const[t,a]of LOGLINES[this.trueGhost].slice(0,3)){L.push("  log: "+t);
+        if(a)L.push("    [margin, Farrow: that behavior is a Tell — verify it "+
+          "on site and the Journal narrows]")}
+      L.push("Downed Manifest: 1 Alpha member on site, last seen near the "+
+        (site.room(this.alphaPos)||"site")+".");
+      return L}
+    L.push("H&V FORM 11-R — Claimed Entity: "+GHOSTS[this.claimed].name.toUpperCase());
+    L.push("Confidence: "+(this.misid?rng.choice(["High","High","Moderate"]):"High")+".");
+    const pool=LOGLINES[this.trueGhost].filter(([,a])=>a==null||GHOSTS[this.claimed].possible.includes(a));
+    for(const[t]of rng.sample(pool,Math.min(2,pool.length)))L.push("  log: "+t);
+    if(this.misid&&this.difficulty==="veteran")
+      L.push("  log: "+THREADS[this.claimed+"|"+this.trueGhost]);
+    L.push("Downed Manifest: 1 Alpha member on site, last seen near the "+
+      (site.room(this.alphaPos)||"site")+".");
+    return L}
+}
+// ---------- sim ----------
+class Sim{
+  constructor(seed=1,difficulty="standard",forceMisid=null,forceGhost=null){
+    this.rng=RNG("sim:"+seed);
+    this.contract=new Contract(seed,difficulty,forceMisid,forceGhost);
+    this.cfg=DIFF[difficulty];this.site=new Site();
+    this.gdef=GHOSTS[this.contract.trueGhost];
+    this.journal=new Journal(this.contract.claimed);
+    this.round=1;this.dread=0;this.floor=0;this.huntsSurvived=0;this.thresholdsFired=new Set();
+    this.logLines=[];this.events=[];this.over=false;this.outcome=null;this.banished=false;
+    this.gpos=this.contract.ghostStart.slice();this.noiseHeard=[];
+    this.hunt=null;this.prelude=false;this.forceHunt=false;
+    this.hosted=false;this.quietUntil=0;this.marked=null;this.collapse=null;
+    this.anchorFound=false;this.anchorRoom=null;this.anchorConfirmed=false;
+    this.placed={};this.banked=0;this.inflight=[];this.interrupted=new Set();
+    this.fragments=0;this.verifiedChallenge=false;
+    const van=this.site.roomTiles("Van");
+    this.squad=[this.mk("Vance","Ritualist",van[0]),this.mk("Okafor","Warden",van[1]),
+      this.mk("Lis","Scout",van[2])];
+    this.alpha={pos:this.contract.alphaPos.slice(),tagged:true,rescued:false,carriedBy:null};
+    if(this.contract.trueGhost==="banshee")this.marked=this.rng.choice(this.squad.map(s=>s.name));
+    this.humRooms=new Set();this.propertyDamage=0;
+    this.loadout()}
+  mk(name,cls,pos){return{name,cls,pos:pos.slice(),hp:cls==="Warden"?14:10,maxHp:cls==="Warden"?14:10,
+    composure:100,ap:0,items:[],hidden:false,hideSeen:false,steadied:false,downed:false,dead:false,
+    carrying:null,rattledHist:new Set(),
+    get rattled(){return this.composure<25},
+    get initials(){return this.name.slice(0,2).toUpperCase()},
+    mobile(){return!this.downed&&!this.dead}}}
+  loseComp(s,n){if(s.steadied)n=Math.ceil(n/2);s.composure=Math.max(0,s.composure-n)}
+  gainComp(s,n){s.composure=Math.min(100,s.composure+n)}
+  loadout(){const claim=this.contract.claimed||"hantu";
+    const need={...GHOSTS[claim].rite.reag};delete need.name_fragment;
+    const flat=[];for(const[r,n]of Object.entries(need))for(let i=0;i<n;i++)flat.push(r);
+    flat.push("salt","salt","lantern","cleansing_bundle");
+    flat.slice(0,12).forEach((item,i)=>this.squad[i%3].items.push(item));
+    this.squad.forEach(s=>s.items=s.items.slice(0,4))}
+  log(msg,cls){this.logLines.push({r:this.round,msg,cls:cls||""})}
+  spec(name){return this.squad.find(s=>s.name.toLowerCase().startsWith(name.toLowerCase()))}
+  rite(){const w=this.journal.workingId;return w?GHOSTS[w].rite:null}
+  // perception --------------------------------------------------------
+  perceivers(pos,noise,visible=true){const out=[];
+    const heard=noise>0?this.site.loudness(pos,noise):{};
+    for(const s of this.squad){if(!s.mobile())continue;
+      if(visible&&!s.hidden&&this.site.los(s.pos,pos)&&cheb(s.pos,pos)<=11)out.push(s);
+      else if(heard[key(s.pos)])out.push(s);
+      else if(s.cls==="Scout"&&cheb(s.pos,pos)<=8)out.push(s)}
+    return out}
+  emit(pos,noise,text,atoms=[],visible=true,sitewide=false){
+    const pv=sitewide?this.squad.filter(s=>s.mobile()):this.perceivers(pos,noise,visible);
+    if(!pv.length)return;
+    const room=this.site.room(pos)||"somewhere";
+    this.log("~ "+text+" ("+room+")","ev");this.events.push({pos:pos.slice(),kind:"ring"});
+    pv.forEach(s=>this.loseComp(s,3));
+    if(!atoms.length)return;
+    const obs=pv[0];
+    for(let atom of atoms){let hf=false;
+      if(obs.rattled&&this.rng.random()<0.5){
+        const claim=this.journal.workingId||this.contract.trueGhost;
+        const pool=GHOSTS[claim].possible.filter(a=>!a.startsWith("backfire"));
+        atom=this.rng.choice(pool);hf=true;obs.rattledHist.add(this.round)}
+      this.journal.log(this.round,obs.initials,atom,hf)}}
+  makeNoise(pos,noise){if(noise>=3)this.noiseHeard.push([pos.slice(),noise])}
+  spend(s,ap){if(s.ap<ap)return false;s.ap-=ap;return true}
+  // actions -----------------------------------------------------------
+  actMove(s,dest,sprint=false){
+    if(!s.mobile()||s.hidden)return[false,"cannot move"];
+    let limit=sprint?7:(s.carrying?3:4);
+    if(s.carrying&&sprint)return[false,"cannot sprint while carrying"];
+    if(s.cls==="Scout"&&!sprint&&!s.carrying)limit=5;
+    const blocked=this.squad.filter(o=>o!==s&&o.mobile()).map(o=>o.pos);
+    const path=this.site.path(s.pos,dest,{blocked});
+    if(!path||path.length>limit)return[false,"out of range or blocked"];
+    if(!this.spend(s,sprint?2:1))return[false,"no AP"];
+    s.pos=dest.slice();s.steadied=false;
+    this.makeNoise(dest,sprint?4:1);
+    if(sprint)this.dreadAdd(1);
+    if(s.carrying==="alpha")this.alpha.pos=dest.slice();
+    this.onEnter(s);
+    return[true,s.name+(sprint?" sprints":" moves")]}
+  onEnter(s){const room=this.site.room(s.pos);
+    if(room&&room===this.site.room(this.contract.anchor)&&!this.humRooms.has(room)){
+      this.humRooms.add(room);this.anchorFound=true;this.anchorRoom=room;
+      this.loseComp(s,2);
+      this.log("* "+s.name+" feels it: resonance in the "+room+". (Anchor room found)","ok")}}
+  actDoor(s,pos){if(this.site.kind[key(pos)]!=="door"||cheb(s.pos,pos)>1)return[false,"no adjacent door"];
+    if(this.site.jammed.has(key(pos))){if(!this.spend(s,2))return[false,"jammed door needs 2 AP"];
+      this.site.jammed.delete(key(pos))}
+    this.site.doorOpen[key(pos)]=!this.site.doorOpen[key(pos)];
+    this.makeNoise(pos,1);
+    return[true,"door "+(this.site.doorOpen[key(pos)]?"opened":"closed")]}
+  actInteract(s,what,pos){if(!s.mobile()||s.hidden)return[false,"cannot act"];
+    const p=pos||s.pos;if(cheb(s.pos,p)>1)return[false,"not adjacent"];
+    if(!this.spend(s,1))return[false,"no AP"];
+    this.makeNoise(p,2);
+    switch(what){
+    case"furnace":if(cheb(s.pos,FURNACE)>1){s.ap++;return[false,"not at the furnace"]}
+      this.site.furnaceOn=!this.site.furnaceOn;this.dreadAdd(2);
+      return[true,"furnace "+(this.site.furnaceOn?"lit":"killed")];
+    case"breaker":if(cheb(s.pos,BREAKER)>1){s.ap++;return[false,"not at the breaker"]}
+      if(this.round<this.site.breakerLocked)return[true,"the breaker is locked by the surge"];
+      this.site.breakerOn=!this.site.breakerOn;this.dreadAdd(2);
+      return[true,"breaker "+(this.site.breakerOn?"on":"off")];
+    case"light":{const room=this.site.room(s.pos);
+      if(!(room in this.site.fixtureOn))return[true,"no fixture here"];
+      this.site.fixtureOn[room]=!this.site.fixtureOn[room];
+      if(this.site.fixtureOn[room])this.dreadAdd(1);
+      return[true,room+" light "+(this.site.fixtureOn[room]?"on":"off")]}
+    case"search":{const y=this.site.searchLeft[key(p)];
+      if(!y||!y.length)return[true,"nothing more here"];
+      let item=y.shift();
+      if(this.contract.trueGhost==="demon"&&FRAG_TILES.includes(key(p))&&this.fragments<2){
+        item="name_fragment";this.fragments++;
+        this.log("* "+s.name+" finds a name-fragment ("+this.fragments+"/2).","ok")}
+      if(s.items.length<4){s.items.push(item);return[true,"found "+RNAME[item]]}
+      this.site.floorItems[key(p)]=(this.site.floorItems[key(p)]||[]).concat([item]);
+      return[true,"found "+RNAME[item]+" but hands are full — left on the floor"]}
+    case"tag":return[true,"no tagging needed — walk up and shoulder them"];
+    case"inspect":if(key(p)===key(this.contract.anchor)){this.anchorConfirmed=true;
+        return[true,"ANCHOR CONFIRMED — this is the tether"]}
+      return[true,"nothing — this object is inert"];
+    case"salt_check":{const line=this.site.saltLines[key(p)];
+      if(!line)return[true,"no salt line here"];
+      if(line.record){this.journal.log(this.round,"SALT LINE",line.record,false,true);
+        this.log("* the salt line testifies: "+ATOM[line.record],"ok");line.record=null;
+        return[true,"salt line read logged (Confirmed)"]}
+      return[true,"salt line "+line.state+", nothing new"]}
+    }
+    s.ap++;return[false,"unknown interaction"]}
+  takeFromCrate(s,item){if(this.site.room(s.pos)!=="Van"||s.items.length>=4)
+      return[false,"must be at the van with a free slot"];
+    if(!this.spend(s,1))return[false,"no AP"];
+    if(!this.site.crate)this.site.crate=CRATE.slice();
+    const i=this.site.crate.indexOf(item);
+    if(i>=0){this.site.crate.splice(i,1);s.items.push(item);return[true,"took "+RNAME[item]]}
+    s.ap++;return[false,"no "+RNAME[item]+" left in the crate"]}
+  actDrop(s,item){const i=s.items.indexOf(item);if(i<0)return[false,"not carried"];
+    s.items.splice(i,1);
+    this.site.floorItems[key(s.pos)]=(this.site.floorItems[key(s.pos)]||[]).concat([item]);
+    return[true,s.name+" drops "+RNAME[item]]}
+  actPickup(s,pos,item){if(cheb(s.pos,pos)>1||s.items.length>=4)return[false,"not adjacent or hands full"];
+    const stack=this.site.floorItems[key(pos)]||[];
+    if(!stack.length)return[false,"nothing there"];
+    if(item==null)item=stack[0];
+    const i=stack.indexOf(item);if(i<0)return[false,"not there"];
+    if(!this.spend(s,1))return[false,"no AP"];
+    stack.splice(i,1);s.items.push(item);this.makeNoise(pos,2);
+    return[true,s.name+" recovers "+RNAME[item]]}
+  actPlace(s,item){const i=s.items.indexOf(item);
+    if(i<0||!this.spend(s,1))return[false,"not carried or no AP"];
+    s.items.splice(i,1);this.makeNoise(s.pos,1);
+    const rite=this.rite();
+    if(rite&&this.anchorConfirmed&&cheb(s.pos,this.contract.anchor)<=1&&
+       rite.reag[item]!=null&&(this.placed[item]||0)<rite.reag[item]){
+      this.placed[item]=(this.placed[item]||0)+1;
+      return[true,RNAME[item]+" placed at the Anchor"]}
+    if(item==="salt"){this.site.saltLines[key(s.pos)]={state:"intact",record:null};
+      return[true,"salt line laid"]}
+    if(item==="lantern"){this.site.lanterns.push(s.pos.slice());return[true,"lantern lit"]}
+    if(item==="cleansing_bundle"){const before=this.dread;
+      this.dread=Math.max(this.floor,this.dread-10);
+      return[true,"cleansing bundle burned: Dread "+before+" → "+this.dread]}
+    s.items.push(item);s.ap++;
+    return[false,"reagents place at the confirmed Anchor (salt/lantern/bundle anywhere)"]}
+  riteReady(){const rite=this.rite();
+    if(!rite||!this.anchorConfirmed)return[false,"no working ID or Anchor unconfirmed"];
+    const need={...rite.reag};const frags=need.name_fragment||0;delete need.name_fragment;
+    if(frags&&this.fragments<frags)return[false,"name-fragments "+this.fragments+"/"+frags];
+    for(const[r,n]of Object.entries(need))
+      if((this.placed[r]||0)<n)return[false,"missing "+RNAME[r]+" "+(this.placed[r]||0)+"/"+n];
+    return[true,"ready"]}
+  specialOk(rite){const room=this.site.room(this.contract.anchor);
+    switch(rite.special){
+    case"warm":return[this.site.temp[room]>=15,"the Anchor room is too cold"];
+    case"lit":return[this.site.lightLevel(this.contract.anchor,this.round)==="lit","the Anchor room is not lit"];
+    case"dark":return[!this.site.breakerOn,"site power must be off"];
+    case"marked_near":{const m=this.marked?this.spec(this.marked):null;
+      const ok=m&&m.mobile()&&cheb(m.pos,this.contract.anchor)<=2;
+      return[ok||this.contract.trueGhost!=="banshee","the Marked must stand within 2 tiles of the effigy"]}
+    case"lone":{const near=this.squad.filter(s=>s.mobile()&&cheb(s.pos,this.contract.anchor)<=6);
+      return[near.length===1,"exactly one specialist may keep the vigil"]}
+    }return[true,""]}
+  actChannel(s){const rite=this.rite();const[ok,why]=this.riteReady();
+    if(!ok)return[false,why];
+    if(cheb(s.pos,this.contract.anchor)>1)return[false,"must be within 1 tile of the Anchor"];
+    if(!this.spend(s,2))return[false,"channel takes the whole turn (2 AP)"];
+    const[sok,swhy]=this.specialOk(rite);
+    if(!sok){s.ap+=2;return[false,swhy]}
+    if(!this.inflight.length)this.dreadAdd(4);
+    this.inflight.push(s.name);this.makeNoise(s.pos,3);
+    return[true,s.name+" channels — the chant holds"]}
+  actHide(s){let spot=null;
+    for(const[dx,dy]of[[0,0],...D8]){const p=[s.pos[0]+dx,s.pos[1]+dy];
+      if(this.site.furn[key(p)]==="hide"&&!this.squad.some(o=>o.hidden&&key(o.pos)===key(p))){spot=p;break}}
+    if(!spot)return[false,"no free hiding spot adjacent"];
+    if(s.carrying)return[false,"cannot hide while carrying"];
+    if(!this.spend(s,1))return[false,"no AP"];
+    s.pos=spot;s.hidden=true;
+    s.hideSeen=!!this.hunt&&this.site.los(this.gpos,spot)&&cheb(this.gpos,spot)<=6;
+    return[true,s.name+" hides"]}
+  actUnhide(s){if(!s.hidden)return[false,"not hidden"];
+    if(!this.spend(s,1))return[false,"no AP"];
+    s.hidden=false;s.hideSeen=false;return[true,s.name+" slips out"]}
+  actSteady(s){if(!this.spend(s,1))return[false,"no AP"];
+    s.steadied=true;return[true,s.name+" steadies"]}
+  actLift(s){if(s.carrying)return[false,"already carrying"];
+    if(!this.alpha.rescued&&!this.hosted&&this.alpha.carriedBy==null&&
+       cheb(s.pos,this.alpha.pos)<=1){
+      if(!this.spend(s,1))return[false,"no AP"];
+      s.carrying="alpha";this.alpha.carriedBy=s.name;this.alpha.pos=s.pos.slice();
+      this.makeNoise(s.pos,2);
+      return[true,s.name+" shoulders the Alpha — carry them to the van"]}
+    for(const o of this.squad)if(o.downed&&!o.dead&&cheb(s.pos,o.pos)<=1&&!o.carrying){
+      if(!this.spend(s,1))return[false,"no AP"];
+      s.carrying=o.name;return[true,s.name+" lifts "+o.name]}
+    return[false,"no body adjacent (Alpha must be tagged)"]}
+  actLower(s){if(!s.carrying)return[false,"carrying nothing"];
+    if(s.carrying==="alpha"){this.alpha.carriedBy=null;this.alpha.pos=s.pos.slice();
+      if(this.site.room(s.pos)==="Van"){this.alpha.rescued=true;
+        this.log("* the Alpha is lowered into the van. Rescued.","ok")}}
+    else{const o=this.spec(s.carrying);o.pos=s.pos.slice()}
+    s.carrying=null;return[true,s.name+" lowers the body"]}
+  actChallenge(nu){if(!GHOSTS[nu])return[false,"unknown ghost"];
+    const old=this.journal.workingId;
+    if(nu===old)return[false,"that is already the working ID"];
+    const{fee,verified}=this.journal.challenge(nu);
+    if(verified){this.squad.forEach(s=>this.gainComp(s,10));
+      this.log("* FORM 12-A SIGNED: working ID is now "+GHOSTS[nu].name+
+        ". VERIFIED — the crew rallies (+10 Composure).","ok")}
+    else this.log("* FORM 12-A SIGNED: working ID is now "+GHOSTS[nu].name+" (unverified hunch).","ok");
+    this.verifiedChallenge=verified&&nu===this.contract.trueGhost;
+    return[true,"challenged to "+GHOSTS[nu].name+(fee?" (re-file fee "+fee+")":"")]}
+  // dread -------------------------------------------------------------
+  dreadAdd(n){this.dread=Math.min(100,this.dread+n)}
+  fireThresholds(){for(const th of[25,50,75]){
+    if(this.dread>=th&&!this.thresholdsFired.has(th)){this.thresholdsFired.add(th);
+      const mobile=this.squad.filter(s=>s.mobile());if(!mobile.length)continue;
+      if(th===25){this.log("! DREAD 25 — Unrest: a door slams somewhere unseen.","al");
+        this.makeNoise(this.gpos,3)}
+      else if(th===50){const low=mobile.reduce((a,b)=>a.composure<b.composure?a:b);
+        this.loseComp(low,8);
+        this.log("! DREAD 50 — Malice: a door slams beside "+low.name+" (−8 Composure).","al")}
+      else{mobile.forEach(s=>this.loseComp(s,5));
+        this.log("! DREAD 75 — Fury: sitewide flicker (−5 Composure all).","al")}}}}
+  // phases ------------------------------------------------------------
+  startPlayerPhase(){this.bankChannel();
+    for(const s of this.squad){s.ap=s.mobile()?2:0;
+      if(s.mobile()&&s.rattled){s.rattledHist.add(this.round);
+        const roll=this.rng.randint(1,4);
+        if(roll===1){s.ap--;this.log("! "+s.name+" is Rattled — FREEZE (loses 1 AP).","al")}
+        else if(roll===2&&!s.steadied){
+          const away=this.site.path(s.pos,[11,14],{});
+          if(away&&away.length)s.pos=away[Math.min(3,away.length-1)].slice();
+          this.log("! "+s.name+" is Rattled — BOLT.","al");this.interrupted.add(s.name)}
+        else if(roll===3&&s.items.length){
+          const drop=s.items.splice(Math.floor(this.rng.random()*s.items.length),1)[0];
+          this.site.floorItems[key(s.pos)]=(this.site.floorItems[key(s.pos)]||[]).concat([drop]);
+          this.log("! "+s.name+" is Rattled — FUMBLE, drops "+RNAME[drop]+".","al");
+          this.makeNoise(s.pos,2)}
+        else this.log("! "+s.name+" is Rattled — white-knuckled. Their reads may be wrong.","al")}
+      s.steadied=false}}
+  bankChannel(){const rite=this.rite();
+    if(!this.inflight.length||!rite){this.inflight=[];return}
+    const chans=this.inflight.filter(n=>!this.interrupted.has(n));
+    this.interrupted=new Set();
+    const needAll=rite.special==="all_channel";
+    const mobile=this.squad.filter(s=>s.mobile()).map(s=>s.name);
+    const ok=chans.length>0&&(!needAll||mobile.every(n=>chans.includes(n)));
+    this.inflight=[];
+    if(!ok){this.log("* the chant was broken — the in-flight turn is lost.","al");return}
+    this.banked++;
+    let len=rite.len;
+    if(chans.includes("Vance")&&rite.special!=="all_channel")len=Math.max(2,len-1);
+    if(rite.special==="manifest_t2"&&this.banked===2){
+      chans.forEach(n=>this.loseComp(this.spec(n),8));
+      this.log("~ she manifests inside the sigil, bowed and silent. (−8 Composure, channelers)","ev")}
+    this.log("* channel banks: "+this.banked+"/"+len+".","ok");
+    if(this.banked>=len)this.completeRite()}
+  completeRite(){const wid=this.journal.workingId;
+    if(wid===this.contract.trueGhost){this.banished=true;this.hunt=null;this.prelude=false;
+      if(this.hosted){this.hosted=false;this.alpha.pos=this.gpos.slice();
+        this.log("* the Alpha collapses, breathing — the Dybbuk is driven out of its host.","ok")}
+      this.log("* BANISHMENT. The "+GHOSTS[wid].name+" is dragged manifest to the Anchor "+
+        "and comes apart.","ok");
+      this.events.push({pos:this.contract.anchor.slice(),kind:"banish"});
+      // The entity was the only thing holding this place together.
+      this.collapse={t:0,limit:10};
+      this.log("!! THE ANCHOR BREAKS — and the house stops holding its breath. "+
+        "Get out. Take her with you.","al")}
+    else this.backfire()}
+  backfire(){const t=this.contract.trueGhost;const site=this.site;
+    this.dreadAdd(15);
+    this.squad.forEach(s=>{if(s.mobile())this.loseComp(s,15)});
+    this.placed={};this.banked=0;
+    const atom="backfire_"+t;
+    this.journal.log(this.round,"BACKFIRE",atom,false,true);
+    this.log("! "+ATOM[atom],"al");
+    this.events.push({pos:this.contract.anchor.slice(),kind:"backfire"});
+    if(t==="demon")this.forceHunt=true;
+    else if(t==="hantu")site.temp[site.room(this.contract.anchor)]=2;
+    else if(t==="jinn"){site.breakerOn=true;site.breakerLocked=this.round+2}
+    else if(t==="mare"){site.breakerOn=false;
+      for(const r of Object.keys(site.fixtureOn))site.fixtureDead[r]=this.round+3}
+    else if(t==="yurei")this.squad.forEach(s=>{if(s.mobile())this.loseComp(s,10)});
+    else if(t==="poltergeist"){const room=site.room(this.contract.anchor);
+      this.squad.forEach(s=>{if(s.mobile()&&site.room(s.pos)===room)s.hp--})}
+    else if(t==="banshee"){const m=this.squad.filter(s=>s.mobile()).map(s=>s.name);
+      if(m.length)this.marked=this.rng.choice(m)}
+    else if(t==="revenant"){const low=this.squad.filter(s=>s.mobile())
+        .reduce((a,b)=>a.composure<b.composure?a:b,this.squad[0]);
+      if(low)this.loseComp(low,10)}
+    else if(t==="shade")this.quietUntil=this.round+3;
+    else if(t==="draugr")for(const k of Object.keys(site.kind))
+      if(site.kind[k]==="door"){site.doorOpen[k]=false;site.jammed.add(k)}
+    else if(t==="dybbuk"&&!this.hosted&&!this.alpha.rescued&&this.alpha.carriedBy==null){
+      this.hosted=true;this.gpos=this.alpha.pos.slice()}
+    if(this.huntCheck(25))this.prelude=true}
+  ghostPhase(){if(this.over)return;
+    if(this.banished){if(this.collapse)this.collapsePhase();return}
+    this.events=[];
+    if(this.prelude){this.prelude=false;
+      this.hunt={phase:0,lastSeen:null,quiet:0,refuge:false,
+        duration:this.gdef.dur+(this.dread>=80?1:0)};
+      this.squad.forEach(s=>{if(s.mobile())this.loseComp(s,5)});
+      this.log("!! PRELUDE — sitewide flicker, a low rumble. The Hunt begins next phase. (−5 Composure all)","al")}
+    else if(this.hunt)this.huntPhase();
+    else this.calmPhase();
+    const hantu=this.contract.trueGhost==="hantu";
+    this.site.tickTemp(this.site.room(this.gpos),hantu);
+    this.dreadAdd(2);
+    this.fireThresholds();
+    this.compEnvironment();
+    if(!this.hunt&&!this.prelude&&!this.banished){
+      if(this.forceHunt){this.forceHunt=false;this.prelude=true;
+        this.log("!! The Wrath answers — a Hunt regardless of Dread.","al")}
+      else if(this.huntCheck())this.prelude=true}
+    this.noiseHeard=[]}
+  collapsePhase(){const c=this.collapse,site=this.site,a=this.contract.anchor;
+    this.events=[];c.t++;
+    const r=c.t+1;
+    for(const k in site.roomOf){const p=k.split(",").map(Number);
+      if(site.room(p)==="Van"||site.rubble.has(k))continue;
+      if(cheb(p,a)>r)continue;
+      if(this.rng.random()<0.5){site.rubble.add(k);
+        this.events.push({pos:p,kind:"rubble"})}}
+    for(const nm of Object.keys(site.fixtureOn))
+      if(this.rng.random()<0.34)site.fixtureOn[nm]=false;
+    for(const s of this.squad){
+      if(!s.mobile())continue;
+      if(!site.rubble.has(key(s.pos)))continue;
+      s.hp-=2;this.loseComp(s,10);
+      let clear=false;
+      for(const[dx,dy]of D8){const q=[s.pos[0]+dx,s.pos[1]+dy];
+        if(site.walkable(q)){s.pos=q;if(s.carrying==="alpha")this.alpha.pos=q.slice();
+          clear=true;break}}
+      this.events.push({pos:s.pos.slice(),kind:"strike"});
+      this.log("!! the ceiling comes down on "+s.name+
+        (clear?" — they scramble clear (2 HP)":" — pinned (2 HP)"),"al");
+      if(s.hp<=0)this.down(s)}
+    const left=c.limit-c.t;
+    if(left>0)this.log("!! the site is coming apart — "+left+
+      " round"+(left===1?"":"s")+" before it goes.","al");
+    if(c.t>=c.limit){
+      const inside=this.squad.filter(s=>s.mobile()&&site.room(s.pos)!=="Van");
+      if(inside.length){
+        for(const s of inside){s.hp=0;this.down(s)}
+        this.log("!! THE ROOF GOES. Whoever was still inside is under it.","al");
+        this.over=true;this.outcome="collapsed"}
+      else{this.over=true;this.outcome="banished"}}}
+  compEnvironment(){for(const s of this.squad){
+      if(!s.mobile()||this.site.room(s.pos)==="Van")continue;
+      if(this.site.lightLevel(s.pos,this.round)==="dark")this.loseComp(s,2);
+      if(this.contract.trueGhost==="yurei"&&cheb(s.pos,this.gpos)<=4){
+        this.loseComp(s,6);
+        if(this.rng.random()<0.6){this.journal.log(this.round,s.initials,"aura_drain");
+          this.log("~ "+s.name+" shivers: composure bleeding with no event on screen.","ev")}}}
+    for(const s of this.squad){if(!s.mobile()||s.hidden)continue;
+      const near=this.squad.some(o=>o!==s&&o.mobile()&&cheb(s.pos,o.pos)<=1);
+      if(near&&this.site.lightLevel(s.pos,this.round)!=="dark")this.gainComp(s,3)}}
+  huntCheck(bonus=0){const g=this.contract.trueGhost;
+    let thr,sub,rolls;
+    if(g==="demon"){thr=40;sub=30;rolls=2}else{thr=this.gdef.thr;sub=50;rolls=1}
+    if(g==="dybbuk"&&!this.hosted)return false;
+    if(g==="shade"&&!this.isolated().length)return false;
+    if(g==="banshee"){const m=this.marked?this.spec(this.marked):null;
+      if(!(m&&m.mobile())){const mo=this.squad.filter(s=>s.mobile()).map(s=>s.name);
+        if(mo.length)this.marked=this.rng.choice(mo);return false}}
+    if(this.dread<thr)return false;
+    const target=this.dread-sub+bonus;
+    for(let i=0;i<rolls;i++){const roll=this.rng.randint(1,100);
+      if(roll<=target){this.log("!! HUNT CHECK at Dread "+this.dread+": d100="+roll+" ≤ "+target+" — passed.","al");
+        if(this.dread<60){this.journal.log(this.round,"THE DIAL","early_hunt",false,true);
+          this.log("* the dial should not be live yet. (early hunt logged, Confirmed)","ok")}
+        return true}}
+    return false}
+  isolated(){return this.squad.filter(s=>s.mobile()&&
+    !this.squad.some(o=>o!==s&&o.mobile()&&cheb(o.pos,s.pos)<=6))}
+  ghostSpeed(){const g=this.contract.trueGhost,site=this.site;
+    if(g==="hantu"){const t=site.temp[site.room(this.gpos)||"Hall"]??13;
+      return t<=8?5:(t>=20?2:3)}
+    if(g==="mare")return site.lightLevel(this.gpos,this.round)==="lit"?2:4;
+    if(g==="jinn")return site.breakerOn?4:2;
+    if(g==="yurei"||g==="shade")return 2;
+    return 3}
+  ghostHuntSpeed(){const g=this.contract.trueGhost,site=this.site;
+    if(g==="hantu"){const t=site.temp[site.room(this.gpos)||"Hall"]??13;
+      return t<=8?6:(t>=20?3:4)}
+    if(g==="mare")return site.lightLevel(this.gpos,this.round)==="lit"?3:5;
+    if(g==="jinn")return site.breakerOn?6:3;
+    if(g==="demon")return 5;
+    if(g==="revenant")return 6;
+    if(g==="yurei"||g==="shade"||g==="draugr")return 3;
+    return 4}
+  ghostMove(target,tiles){const walls=this.contract.trueGhost==="wraith";
+    const path=this.site.path(this.gpos,target,{ghost:true,walls});
+    if(!path)return[];
+    const moved=[];let budget=tiles;
+    for(const step of path){if(budget<=0)break;
+      const line=this.site.saltLines[key(step)];
+      if(line&&line.state==="intact"&&!this.gdef.crosses&&!this.hunt){
+        line.record=this.gdef.saltRec;break}
+      let cost=1;const k=this.site.kind[key(step)];
+      if(k==="door"&&!this.site.doorOpen[key(step)]){
+        const da=this.gdef.possible.includes("door_op")?["door_op"]:[];
+        if(!walls){if(this.hunt)cost=2;
+          this.site.doorOpen[key(step)]=true;
+          this.emit(step,1,"a door swings open on its own",da)}}
+      if(this.site.lightLevel(step,this.round)==="lit"&&
+         this.contract.trueGhost==="mare"&&this.hunt)cost++;
+      if(budget<cost)break;
+      budget-=cost;this.gpos=step.slice();
+      if(this.hosted)this.alpha.pos=step.slice();
+      moved.push(step);
+      const l2=this.site.saltLines[key(step)];
+      if(l2&&l2.state==="intact"){
+        if(this.hunt){l2.state="scoured";l2.record=null;
+          this.log("~ the salt line is scoured in the rush.","ev")}
+        else{l2.record=this.gdef.saltRec;
+          if(this.gdef.saltRec==="salt_scatter")l2.state="scoured"}}}
+    return moved}
+  calmPhase(){const g=this.contract.trueGhost;
+    if(this.round<this.quietUntil)return;
+    if(g==="revenant"){this.revenantCalm();return}
+    let target=null;
+    if(this.noiseHeard.length){const loud=this.noiseHeard.reduce((a,b)=>a[1]>b[1]?a:b);
+      if(this.site.loudness(loud[0],loud[1]+6)[key(this.gpos)])target=loud[0]}
+    if(!target){const seen=this.squad.filter(s=>s.mobile()&&!s.hidden&&
+        cheb(this.gpos,s.pos)<=6&&this.site.los(this.gpos,s.pos));
+      if(seen.length)target=seen[0].pos}
+    if(!target)target=this.contract.anchor;
+    if(g==="banshee"&&this.marked){const m=this.spec(this.marked);
+      if(m&&m.mobile())target=m.pos}
+    if(g==="dybbuk"&&!this.hosted&&!this.alpha.rescued&&this.alpha.carriedBy==null)
+      target=this.alpha.pos;
+    const tether={yurei:6,draugr:8}[g];
+    if(tether&&cheb(target,this.contract.anchor)>tether)target=this.contract.anchor;
+    const moved=this.ghostMove(target,this.ghostSpeed());
+    this.movementEvidence(moved);
+    if(g==="dybbuk"&&!this.hosted&&!this.alpha.rescued&&this.alpha.carriedBy==null&&
+       cheb(this.gpos,this.alpha.pos)<=1){
+      this.hosted=true;this.gpos=this.alpha.pos.slice();
+      this.emit(this.gpos,4,"the downed Alpha convulses, stands, and walks",["possession"]);
+      return}
+    if(g==="shade"&&this.groupedNear())return;
+    const budget=this.dread>=25?2:1;
+    for(let i=0;i<budget;i++)this.interaction()}
+  groupedNear(){const near=this.squad.filter(s=>s.mobile()&&cheb(s.pos,this.gpos)<=6);
+    return near.length>=2&&near.some(a=>near.some(b=>a!==b&&cheb(a.pos,b.pos)<=6))}
+  revenantCalm(){const seen=this.squad.filter(s=>s.mobile()&&!s.hidden&&
+      cheb(this.gpos,s.pos)<=8&&this.site.los(this.gpos,s.pos));
+    if(seen.length){const t=seen.reduce((a,b)=>cheb(this.gpos,a.pos)<=cheb(this.gpos,b.pos)?a:b);
+      const moved=this.ghostMove(t.pos,6);
+      if(moved.length)this.emit(this.gpos,2,"movement traces: "+ATOM.los_sprint,["los_sprint"])}
+    else{let tgt=this.contract.anchor;
+      if(this.noiseHeard.length)tgt=this.noiseHeard.reduce((a,b)=>a[1]>b[1]?a:b)[0];
+      const moved=this.ghostMove(tgt,1);
+      if(moved.length&&this.rng.random()<0.5)
+        this.emit(this.gpos,2,"movement traces: "+ATOM.slow_creep,["slow_creep"])}
+    if(this.rng.random()<0.25)this.emit(this.gpos,3,"a long scraping drag",["whisper"])}
+  movementEvidence(moved){if(!moved.length)return;
+    const g=this.contract.trueGhost,site=this.site;
+    const watchers=this.squad.filter(s=>s.mobile()&&(
+      moved.some(p=>site.los(s.pos,p)&&cheb(s.pos,p)<=8)||
+      (s.cls==="Scout"&&moved.some(p=>cheb(s.pos,p)<=8))));
+    if(!watchers.length)return;
+    const room=site.room(this.gpos);const temp=room?site.temp[room]??13:13;
+    let atom=null;
+    if(g==="hantu"){if(temp>=20)atom="warm_slow";else if(temp<=8)atom="fast_cold"}
+    else if(temp>=20)atom="temp_flat";
+    if(g==="mare"&&site.lightLevel(this.gpos,this.round)==="dark"&&moved.length>=3)
+      atom="dark_speed_link";
+    if(g==="jinn"&&!site.breakerOn)atom="power_slow";
+    if(g==="wraith"){for(const p of moved)if(site.kind[key(p)]==="wall"){atom="wall_phase";break}}
+    if(atom)this.emit(this.gpos,2,"movement traces: "+ATOM[atom],[atom])}
+  interaction(){const g=this.contract.trueGhost,r=this.rng.random(),site=this.site;
+    const room=site.room(this.gpos);
+    if(g==="hantu"){
+      if(r<0.30){const closed=WINDOWS.filter(w=>!site.windowOpen[key(w)]);
+        if(closed.length){const w=this.rng.choice(closed);site.windowOpen[key(w)]=true;
+          this.emit(w,2,"a window bangs open",["opens_window"]);return}}
+      if(r<0.55&&room)this.emit(this.gpos,2,"frost crackles across the walls",["cools_room"]);
+      else if(r<0.75)this.emit(this.gpos,2,"a plate slides and shatters",["single_throw"]);
+      else this.emit(this.gpos,3,"a whisper with no mouth",["whisper"])}
+    else if(g==="demon"){
+      const lone=this.squad.filter(s=>s.mobile()&&!s.hidden&&site.room(s.pos)===room&&
+        !this.squad.some(o=>o!==s&&o.mobile()&&site.room(o.pos)===room));
+      if(r<0.25&&lone.length){const v=lone[0];v.hp--;this.loseComp(v,8);
+        this.journal.log(this.round,v.initials,"claw_chip",false,true);
+        this.log("~ something rakes "+v.name+" — a claw chip (1 HP, Confirmed).","al")}
+      else if(r<0.55)this.emit(this.gpos,4,"a chair hurled the length of the room",["single_throw"]);
+      else if(r<0.8&&this.dread>=40)
+        this.emit(this.gpos,0,"the lights snarl and flicker",["flicker"],true,this.dread>=50);
+      else this.emit(this.gpos,3,"a growl beneath the floor",["whisper"])}
+    else if(g==="mare"){
+      const lit=Object.keys(site.fixtureOn).filter(rm=>site.powered(rm)&&
+        this.round>=(site.fixtureDead[rm]||0));
+      if(r<0.45&&lit.length){const rm=this.rng.choice(lit);site.fixtureOn[rm]=false;
+        this.emit(this.gpos,1,"the "+rm+" light dies — switch flipped",["light_kill"],true,true)}
+      else if(r<0.7){const den=site.room(this.contract.anchor);
+        this.emit(this.contract.anchor,2,"the "+den+" door drifts shut again",["den_doors"])}
+      else this.emit(this.gpos,3,"breathing in the dark",["whisper"])}
+    else if(g==="jinn"){
+      const near=this.squad.filter(s=>s.mobile()&&cheb(s.pos,this.gpos)<=3);
+      if(r<0.35&&site.breakerOn)
+        this.emit(this.gpos,3,"a flicker cascade races down the line",["flicker_cascade"],true,true);
+      else if(r<0.6&&near.length){const v=near[0];
+        this.journal.log(this.round,v.initials,"battery_drain");
+        this.log("~ "+v.name+"'s lamp gutters — battery draining double.","ev")}
+      else if(r<0.8&&site.breakerOn)
+        this.emit(this.gpos,0,"every screen hisses static",["flicker"],true,this.dread>=25);
+      else this.emit(this.gpos,3,"an appliance rattles",["whisper"])}
+    else if(g==="wraith"){
+      if(r<0.3&&this.dread>=40){
+        const spots=Object.keys(site.roomOf).map(k=>k.split(",").map(Number))
+          .filter(t=>site.walkable(t)&&cheb(t,this.gpos)>=8&&site.room(t)!=="Van");
+        if(spots.length){this.gpos=this.rng.choice(spots).slice();
+          this.emit(this.gpos,8,"a displacement sigh rolls through the house",["translocation"],true,true);
+          return}}
+      if(r<0.6)this.emit(this.gpos,3,"a whisper through the wall",["whisper"]);
+      else this.emit(this.gpos,2,"a picture frame drops",["single_throw"])}
+    else if(g==="yurei"){
+      if(r<0.4)this.emit([20,6],5,"the bathroom taps open by themselves",["water_sign"]);
+      else if(r<0.7)this.emit(this.gpos,3,"soft sobbing, very close",["whisper"]);
+      else this.emit(this.gpos,1,"a door eases shut",["door_op"])}
+    else if(g==="poltergeist"){
+      if(r<0.35)this.emit(this.gpos,4,"a BARRAGE — plates, books, a chair, all at once",["multi_throw"]);
+      else if(r<0.55)this.emit(this.gpos,2,"loose objects begin to vibrate",["rattle_precursor"]);
+      else if(r<0.8)this.emit(this.gpos,3,"a cup shatters against the wall",["single_throw"]);
+      else this.emit(this.gpos,3,"a gleeful rapping in the walls",["whisper"])}
+    else if(g==="banshee"){
+      const m=this.marked?this.spec(this.marked):null;
+      if(r<0.45&&m&&m.mobile()){this.loseComp(m,10);
+        this.emit(m.pos,3,"a keening wail — only "+m.name+" doubles over",["keening"])}
+      else if(r<0.7)this.emit(this.gpos,3,"a low mourning hum",["whisper"]);
+      else this.emit(this.gpos,2,"a locket slides from a shelf",["single_throw"])}
+    else if(g==="shade"){
+      const lone=this.squad.filter(s=>s.mobile()&&!s.hidden&&cheb(s.pos,this.gpos)<=5&&
+        !this.squad.some(o=>o!==s&&o.mobile()&&cheb(o.pos,s.pos)<=6));
+      if(r<0.5&&lone.length){const v=lone[0];this.loseComp(v,8);
+        this.emit(v.pos,0,"a grey figure, gone when "+v.name+" blinks — no one else saw it",
+          ["lone_manifest"])}
+      else if(r<0.7)this.emit(this.gpos,2,"a candle snuffs by itself",["whisper"]);
+      else this.emit(this.gpos,1,"the faintest nudge of a cup",["single_throw"])}
+    else if(g==="draugr"){
+      if(r<0.3){const doors=Object.keys(site.kind).filter(k=>site.kind[k]==="door"&&
+          cheb(k.split(",").map(Number),this.contract.anchor)<=8&&!site.jammed.has(k));
+        if(doors.length){const d=this.rng.choice(doors).split(",").map(Number);
+          site.doorOpen[key(d)]=false;site.jammed.add(key(d));
+          this.emit(d,3,"a door slams and JAMS",["jammed_doors"]);return}}
+      if(r<0.55)this.emit(this.gpos,4,"heavy tread — the floor trembles",["thud"]);
+      else if(r<0.75)this.emit(this.gpos,4,"a wardrobe topples where it stood",["furniture_topple"]);
+      else this.emit(this.gpos,3,"a guttural muttering",["whisper"])}
+    else if(g==="dybbuk"){
+      const nearBody=!this.alpha.rescued&&cheb(this.gpos,this.alpha.pos)<=4;
+      if(r<0.4&&nearBody&&!this.hosted)
+        this.emit(this.alpha.pos,3,"broken speech near the body: 'help — me — up'",["whisper_mimicry"]);
+      else if(r<0.65)this.emit(this.gpos,2,"a soft, single throw",["single_throw"]);
+      else this.emit(this.gpos,3,"a clinging whisper",["whisper"])}}
+  huntPhase(){const h=this.hunt;h.phase++;
+    let perceived=false;
+    for(let act=0;act<2;act++){
+      const[target,tpos]=this.huntTarget();
+      if(!tpos){this.ghostMove(h.lastSeen||this.contract.anchor,2);continue}
+      if(target)perceived=true;
+      this.ghostMove(tpos,this.ghostHuntSpeed());
+      if(target&&cheb(this.gpos,target.pos)<=1&&!target.hidden){this.strike(target);break}}
+    if(perceived)h.quiet=0;else h.quiet++;
+    if(this.banished||!this.hunt)return;
+    if(h.quiet>=1&&h.phase>=1&&!perceived)this.endHunt("it lost the scent");
+    else if(h.phase>=h.duration)this.endHunt("the fury burns out")}
+  huntTarget(){const h=this.hunt,g=this.contract.trueGhost;
+    let vis=this.squad.filter(s=>s.mobile()&&!s.hidden&&cheb(this.gpos,s.pos)<=6&&
+      this.site.los(this.gpos,s.pos)&&this.site.room(s.pos)!=="Van");
+    if(g==="banshee"){const m=this.marked?this.spec(this.marked):null;
+      if(m&&m.mobile()&&!m.hidden){h.lastSeen=m.pos.slice();return[m,m.pos]}
+      return[null,h.lastSeen]}
+    if(g==="shade"){const iso=this.isolated();vis=vis.filter(s=>iso.includes(s))}
+    for(const s of this.squad){
+      if(s.hidden&&s.hideSeen)vis.push(s);
+      else if(s.hidden&&s.rattled&&this.rng.random()<0.25){
+        this.log("~ a whimper from "+s.name+"'s hiding spot.","ev");
+        this.makeNoise(s.pos,2);vis.push(s)}}
+    if(vis.length){const t=vis.reduce((a,b)=>cheb(this.gpos,a.pos)<=cheb(this.gpos,b.pos)?a:b);
+      h.lastSeen=t.pos.slice();return[t,t.pos]}
+    if(this.noiseHeard.length)return[null,this.noiseHeard.reduce((a,b)=>a[1]>b[1]?a:b)[0]];
+    if(h.lastSeen)return[null,h.lastSeen];
+    return[null,null]}
+  strike(target){const rite=this.rite();
+    if(rite&&rite.special==="all_channel"&&this.hunt&&!this.hunt.refuge&&
+       (this.banked>0||this.inflight.length)&&cheb(target.pos,this.contract.anchor)<=1){
+      this.hunt.refuge=true;
+      this.log("!! the chalk circle flares — the strike aimed at "+target.name+" is turned aside.","ok");
+      return}
+    if(target.hidden)target.hidden=false;
+    const dmg=6-(target.steadied?2:0);
+    target.hp-=dmg;this.loseComp(target,15);
+    const dx=Math.max(-1,Math.min(1,target.pos[0]-this.gpos[0]));
+    const dy=Math.max(-1,Math.min(1,target.pos[1]-this.gpos[1]));
+    for(let i=0;i<2;i++){const n=[target.pos[0]+dx,target.pos[1]+dy];
+      if(this.site.walkable(n))target.pos=n}
+    this.squad.forEach(s=>{if(s!==target&&s.mobile())this.loseComp(s,10)});
+    this.interrupted.add(target.name);
+    this.events.push({pos:target.pos.slice(),kind:"strike"});
+    this.log("!! STRIKE — "+target.name+" takes "+dmg+" ("+Math.max(target.hp,0)+" HP left).","al");
+    if(target.hp<=0){this.down(target);this.endHunt("it is sated")}
+    if(target.carrying==="alpha"){this.alpha.carriedBy=null;target.carrying=null}}
+  down(s){if(s.downed&&this.cfg.perma){s.dead=true;
+      this.log("!! "+s.name+" IS GONE. (Nightmare rules)","al");return}
+    s.downed=true;s.hidden=false;
+    if(s.carrying==="alpha")this.alpha.carriedBy=null;
+    s.carrying=null;
+    if(s.items.length){this.site.floorItems[key(s.pos)]=
+      (this.site.floorItems[key(s.pos)]||[]).concat(s.items);s.items=[]}
+    this.squad.forEach(o=>{if(o!==s&&o.mobile())this.loseComp(o,20)});
+    this.log("!! "+s.name+" IS DOWN. (−20 Composure squadwide)","al");
+    if(this.squad.every(x=>!x.mobile())){this.over=true;this.outcome="failed"}}
+  endHunt(why){this.hunt=null;this.huntsSurvived++;
+    this.floor=Math.min(70,30+10*this.huntsSurvived);
+    this.dread=Math.max(this.floor,this.dread-30);
+    this.squad.forEach(s=>s.hideSeen=false);
+    if(this.contract.trueGhost==="demon"&&this.rng.random()<0.25){this.prelude=true;
+      this.log("!! the Hunt ends ("+why+") — and the pressure IMMEDIATELY builds again. (Dread "+this.dread+")","al")}
+    else this.log("!! the Hunt ends — "+why+". Dread falls to "+this.dread+" (floor "+this.floor+").","al")}
+  endPlayerPhase(){const mobile=this.squad.filter(s=>s.mobile());
+    if(mobile.length&&mobile.every(s=>this.site.room(s.pos)==="Van")){
+      if(this.banished){this.over=true;this.outcome="banished"}
+      else if(this.round>=4){this.over=true;this.outcome="withdraw"}}
+    if(this.round>=90){this.over=true;this.outcome=this.outcome||"timeout"}}
+  advance(){this.endPlayerPhase();if(this.over)return;
+    this.ghostPhase();this.round++;
+    if(!this.over)this.startPlayerPhase()}
+  debrief(){const base=600,mult=this.cfg.mult;const lines=[];let total=0;
+    if(this.outcome==="banished"){total=base*mult;
+      lines.push("Base fee (Medium) ×"+mult+": "+Math.round(total));
+      if(this.alpha.rescued){total+=150;lines.push("Alpha victim extracted: +150")}
+      if(this.squad.every(s=>!s.downed&&!s.dead)){total+=100;lines.push("No specialist Downed: +100")}
+      if(this.dread<75){total+=75;lines.push("Dread < 75: +75")}
+      if(this.huntsSurvived){total+=60*this.huntsSurvived;
+        lines.push("Hazard bonus ×"+this.huntsSurvived+": +"+60*this.huntsSurvived)}
+      if(this.journal.clean()){total+=50;lines.push("Clean Journal: +50")}
+      if(this.verifiedChallenge){total+=250;lines.push("Verified Challenge/Filing: +250")}
+      if(this.collapse&&this.collapse.t>0){total+=120;
+        lines.push("Cleared the collapse: +120")}
+      if(!this.alpha.rescued){total-=200;
+        lines.push("Alpha left on site (H&V notifies the family): -200")}}
+    else if(this.outcome==="collapsed"){
+      lines.push("The entity was banished — and the site took the crew.");
+      lines.push("Hazard pay only, held pending the inquiry: 0")}
+    else if(this.outcome==="withdraw"){
+      const tells=new Set(this.journal.entries.filter(e=>!e.struck).map(e=>e.atom)).size;
+      if(tells>=2){total=base*mult*0.25;
+        lines.push("Withdraw call-out fee (≥2 Tells): "+Math.round(total))}
+      else lines.push("Withdraw with a thin Journal: no fee.")}
+    else lines.push("Contract failed. No fee. Standing penalty.");
+    const fee=50*Math.max(0,this.journal.challenges-1);
+    if(fee){total-=fee;lines.push("Re-file fees: −"+fee)}
+    const falses=this.journal.falseEntries();
+    if(falses.length)lines.push("(Debrief reveals "+falses.length+" FALSE journal "+
+      (falses.length===1?"entry":"entries")+" — logged while Rattled.)");
+    if(this.outcome!=="collapsed"&&this.alpha.rescued&&this.collapse)
+      lines.push("(She walked out on your shoulder. Form 7-C: total loss.)");
+    lines.push("Ground truth: the entity was a "+GHOSTS[this.contract.trueGhost].name+"."+
+      (this.contract.misid?" Alpha's report was WRONG.":""));
+    return[Math.round(total),lines]}
+}
+/*SIM-END*/
+
+// ================= UI =================

@@ -24,6 +24,9 @@ FARMHOUSE = [
     "#..t.H.#.......#..T.t..#",
     "#......#.......#H......#",
     "###########+############",
+    "         VVVVVV         ",
+    "         VVVVVV         ",
+    "         VVVVVV         ",
     "          VVVV          ",
 ]
 
@@ -38,7 +41,7 @@ ROOM_RECTS = {
     "Living":   (1, 9, 6, 12),
     "Foyer":    (8, 9, 14, 12),
     "Study":    (16, 9, 22, 12),
-    "Van":      (10, 14, 13, 14),
+    "Van":      (10, 17, 13, 17),
 }
 
 # Start temperatures (deg C). Cold <= 8, warm >= 20 (02-ghost-roster.md, Hantu).
@@ -145,6 +148,7 @@ class Site:
         self.search_left = {p: list(v) for p, v in SEARCH_YIELDS.items()}
         self.salt_lines = {}           # (x,y) -> {'state': 'intact'|'scoured', 'record': atom|None}
         self.floor_items = {}          # (x,y) -> [dropped items] (01 §8.1)
+        self.rubble = set()            # tiles lost to the collapse
         self.lanterns = []             # lit lantern tiles (radius 2 Lit)
         self.jammed_doors = set()
 
@@ -154,6 +158,8 @@ class Site:
         return 0 <= p[0] < self.w and 0 <= p[1] < self.h
 
     def walkable(self, p, for_ghost=False):
+        if p in self.rubble:
+            return False
         k = self.kind.get(p)
         if k in ("floor", "van"):
             return self.furn.get(p) != "tall" or for_ghost

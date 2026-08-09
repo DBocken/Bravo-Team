@@ -288,8 +288,32 @@ class Bot:
 
     # ---------------------------------------------------------------- rite
 
+    def alpha_run(self, s):
+        """Fetch the Alpha and get her aboard. The collapse after the
+        banishment makes leaving this until the end a losing line."""
+        sim = self.sim
+        a = sim.alpha
+        if a["rescued"] or sim.hosted:
+            return False
+        if s.carrying == "alpha":
+            if self.goto(s, self.van_tile(s)) and s.ap > 0 \
+                    and sim.site.room(s.pos) == "Van":
+                sim.act_lower(s)
+            return True
+        if a["carried_by"] is not None:
+            return False
+        if self.goto(s, a["pos"], adj=True) and s.ap > 0:
+            sim.act_lift(s)
+        return True
+
     def execute_rite(self):
         sim = self.sim
+        # the Scout runs the casualty out while the rite is prepared
+        lis = sim.spec("Lis")
+        self.alpha_busy = False
+        if lis.mobile() and not sim.alpha["rescued"] and not sim.hosted \
+                and sim.round < 55:
+            self.alpha_busy = self.alpha_run(lis)
         vance, okafor, lis = sim.spec("Vance"), sim.spec("Okafor"), sim.spec("Lis")
         if not sim.anchor_found:
             for s in (lis, vance, okafor):
@@ -372,7 +396,7 @@ class Bot:
                             ok, _ = sim.act_pickup(s, floor[0], item)
                             acted = ok
                     elif item in crate:
-                        if self.goto(s, (11, 14)) and s.ap > 0:
+                        if self.goto(s, (11, 17)) and s.ap > 0:
                             ok, _ = sim.take_from_crate(s, item)
                             acted = ok
                         if not acted and s.ap <= 0:
@@ -441,6 +465,8 @@ class Bot:
                     handled = True
             if not handled:
                 self.guard(okafor)
+        if sp == "all_channel" and getattr(self, "alpha_busy", False):
+            return          # everyone channels or nobody does — rescue first
         if sp == "all_channel":
             # Wards pre-laid (02, Naming): salt on the approaches first.
             near_lines = [p for p in sim.site.salt_lines
@@ -466,8 +492,10 @@ class Bot:
         else:
             chans = [vance if vance.mobile() else
                      (lis if lis.mobile() else okafor)]
+            if getattr(self, "alpha_busy", False) and lis in chans:
+                chans = [x for x in (vance, okafor) if x.mobile()] or chans
             if sp == "lone":
-                if lis.mobile() and lis not in chans:
+                if lis.mobile() and lis not in chans and not self.alpha_busy:
                     self.goto(lis, vigil_exile)
                     if lis.ap > 0:
                         sim.act_steady(lis)
@@ -478,7 +506,8 @@ class Bot:
                         and m not in chans:
                     if self.goto(m, anchor, adj=True) and m.ap > 0:
                         sim.act_steady(m)
-                if lis.mobile() and lis not in chans and lis is not m:
+                if lis.mobile() and lis not in chans and lis is not m \
+                        and not getattr(self, "alpha_busy", False):
                     if self.goto(lis, anchor, adj=True) and lis.ap > 0:
                         sim.act_steady(lis)
         all_in = True
@@ -567,7 +596,7 @@ class Bot:
         for p in self.sim.site.room_tiles("Van"):
             if s.pos == p or self.free(p, s):
                 return p
-        return (12, 14)
+        return (12, 17)
 
     def extract(self):
         sim = self.sim
@@ -581,12 +610,9 @@ class Bot:
                               sim.site.chebyshev(s.pos, alpha["pos"]))
                 s = rescuer
                 if self.goto(s, alpha["pos"], adj=True) and s.ap > 0:
-                    if not alpha["tagged"]:
-                        sim.act_interact(s, "tag", alpha["pos"])
-                    if s.ap > 0 and alpha["tagged"]:
-                        sim.act_lift(s)
-                        if s.carrying == "alpha":
-                            carrier = s
+                    sim.act_lift(s)
+                    if s.carrying == "alpha":
+                        carrier = s
         for s in sim.squad:
             if not s.mobile() or s is rescuer and s is not carrier:
                 continue

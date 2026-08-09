@@ -84,6 +84,7 @@ class Sim:
         self.force_hunt = False     # Demon Wrath backfire rider
         self.hosted = False         # Dybbuk: possessing the downed Alpha
         self.quiet_until = 0        # Shade Absence backfire rider
+        self.collapse = None        # set when the anchor breaks (01 §10.3)
         self.marked = None          # Banshee: name of the Marked specialist
 
         # Rite state
@@ -101,7 +102,7 @@ class Sim:
             Specialist("Okafor", "Warden", van[1]),
             Specialist("Lis", "Scout", van[2]),
         ]
-        self.alpha = dict(pos=self.contract.alpha_pos, tagged=False,
+        self.alpha = dict(pos=self.contract.alpha_pos, tagged=True,
                           rescued=False, carried_by=None)
         if self.contract.true_ghost == "banshee":
             self.marked = self.rng.choice([s.name for s in self.squad])
@@ -301,13 +302,7 @@ class Sim:
                 return True, f"found {data.REAGENT_NAMES[item]}"
             return True, f"found {data.REAGENT_NAMES[item]} but hands are full"
         if what == "tag":
-            if self.hosted:
-                return True, "the body is not where you left it — it walks"
-            if self.site.chebyshev(s.pos, self.alpha["pos"]) > 1 \
-                    or self.alpha["tagged"]:
-                return True, "no one to tag"
-            self.alpha["tagged"] = True
-            return True, f"{s.name} tags the Alpha victim for extraction"
+            return True, "no tagging needed — walk up and shoulder them"
         if what == "inspect":
             if p == self.contract.anchor:
                 self.anchor_confirmed = True
@@ -517,8 +512,7 @@ class Sim:
     def act_lift(self, s):
         if s.carrying:
             return False, "already carrying"
-        if self.alpha["tagged"] and not self.alpha["rescued"] and \
-                not self.hosted and \
+        if not self.alpha["rescued"] and not self.hosted and \
                 self.alpha["carried_by"] is None and \
                 self.site.chebyshev(s.pos, self.alpha["pos"]) <= 1:
             if not self._spend(s, 1):
@@ -527,7 +521,7 @@ class Sim:
             self.alpha["carried_by"] = s.name
             self.alpha["pos"] = s.pos
             self._make_noise(s.pos, 2)
-            return True, f"{s.name} lifts the Alpha"
+            return True, f"{s.name} shoulders the Alpha"
         for o in self.squad:
             if o.downed and not o.dead and \
                     self.site.chebyshev(s.pos, o.pos) <= 1 and o.carrying is None:
@@ -535,7 +529,7 @@ class Sim:
                     return False, "no AP"
                 s.carrying = o.name
                 return True, f"{s.name} lifts {o.name}"
-        return False, "no body adjacent (Alpha must be tagged)"
+        return False, "no body adjacent"
 
     def act_lower(self, s):
         if not s.carrying:
@@ -626,7 +620,7 @@ class Sim:
             s.steadied = False
 
     def _bolt(self, s):
-        away = self.site.path(s.pos, (11, 14), for_ghost=False)  # toward the van
+        away = self.site.path(s.pos, (11, 17), for_ghost=False)  # toward the van
         if away:
             s.pos = away[min(3, len(away) - 1)]
         self.log(f"! {s.name} is Rattled — BOLT.")
@@ -673,7 +667,11 @@ class Sim:
                 self.log("* the Alpha collapses, breathing — the Dybbuk is "
                          "driven out of its host.")
             self.log(f"* BANISHMENT. The {data.GHOSTS[wid]['name']} is dragged "
-                     f"manifest to the Anchor and comes apart. The site goes quiet.")
+                     f"manifest to the Anchor and comes apart.")
+            # the entity was the only thing holding this place together
+            self.collapse = dict(t=0, limit=10)
+            self.log("!! THE ANCHOR BREAKS — the house stops holding its "
+                     "breath. Get out, and take her with you.")
         else:
             self._backfire()
 
@@ -739,7 +737,11 @@ class Sim:
     # ------------------------------------------------------------ ghost turn
 
     def ghost_phase(self):
-        if self.over or self.banished:
+        if self.over:
+            return
+        if self.banished:
+            if self.collapse:
+                self._collapse_phase()
             return
         if self.prelude:
             self.prelude = False
@@ -769,6 +771,58 @@ class Sim:
             elif self._hunt_check():
                 self.prelude = True
         self.g_noise_heard = []
+
+    def _collapse_phase(self):
+        """After the banishment the site lets go: rubble spreads from the
+        Anchor, lights fail, and anyone still inside when it finishes is
+        under it. The Alpha carry becomes a race, not a formality."""
+        c = self.collapse
+        site = self.site
+        a = self.contract.anchor
+        c["t"] += 1
+        radius = c["t"] + 1
+        for p in list(site.room_of):
+            if site.room(p) == "Van" or p in site.rubble:
+                continue
+            if site.chebyshev(p, a) > radius:
+                continue
+            if self.rng.random() < 0.5:
+                site.rubble.add(p)
+        for room in list(site.fixture_on):
+            if self.rng.random() < 0.34:
+                site.fixture_on[room] = False
+        for s in self.squad:
+            if not s.mobile() or s.pos not in site.rubble:
+                continue
+            s.hp -= 2
+            s.lose_composure(10)
+            for dx, dy in DIRS4:
+                q = (s.pos[0] + dx, s.pos[1] + dy)
+                if site.walkable(q):
+                    s.pos = q
+                    if s.carrying == "alpha":
+                        self.alpha["pos"] = q
+                    break
+            self.log(f"!! the ceiling comes down on {s.name} (2 HP)")
+            if s.hp <= 0:
+                self._down(s)
+        left = c["limit"] - c["t"]
+        if left > 0:
+            self.log(f"!! the site is coming apart — {left} round"
+                     f"{'' if left == 1 else 's'} before it goes.")
+        if c["t"] >= c["limit"]:
+            inside = [s for s in self.squad
+                      if s.mobile() and site.room(s.pos) != "Van"]
+            if inside:
+                for s in inside:
+                    s.hp = 0
+                    self._down(s)
+                self.log("!! THE ROOF GOES.")
+                self.over = True
+                self.outcome = "collapsed"
+            else:
+                self.over = True
+                self.outcome = "banished"
 
     def _composure_environment(self):
         for s in self.squad:
@@ -1437,6 +1491,12 @@ class Sim:
             if getattr(self, "verified_challenge", False):
                 total += 250
                 lines.append("Verified Challenge/Filing: +250")
+            if self.collapse and self.collapse["t"] > 0:
+                total += 120
+                lines.append("Cleared the collapse: +120")
+            if not self.alpha["rescued"]:
+                total -= 200
+                lines.append("Alpha left on site: -200")
         elif self.outcome == "withdraw":
             tells = len({e.atom for e in self.journal.entries if not e.struck})
             if tells >= 2:
@@ -1444,6 +1504,8 @@ class Sim:
                 lines.append(f"Withdraw call-out fee (>=2 Tells): {int(total)}")
             else:
                 lines.append("Withdraw with a thin Journal: no fee.")
+        elif self.outcome == "collapsed":
+            lines.append("The entity was banished — and the site took the crew.")
         else:
             lines.append("Contract failed. No fee. Standing penalty.")
         fee = 50 * max(0, self.journal.challenges - 1)

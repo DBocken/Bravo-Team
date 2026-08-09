@@ -45,7 +45,7 @@ flowchart TD
 | **Move** | 1 | 1 | Up to **4 tiles**, 8-directional (Chebyshev — diagonals cost 1). Cannot pass through walls, closed doors, tall furniture, or other specialists. |
 | **Sprint** | 2 | 4 | Up to **7 tiles**. Cannot end in a hiding spot. Adds +1 Dread (§5). |
 | **Open / close door** | free | 1 | One free door operation per specialist per turn, on an adjacent door. Additional door ops cost 1 AP each. Closing a door during a Sprint is a **slam**: noise 3. |
-| **Interact** | 1 | 2 | Search furniture, flip a room light, throw a breaker, inspect a suspected Anchor, smash a window (noise 5), tag an Alpha victim for extraction. |
+| **Interact** | 1 | 2 | Search furniture, flip a room light, throw a breaker, inspect a suspected Anchor, smash a window (noise 5). |
 | **Use gear** | 1 | 0–2 | Thermometer read, place tripod sensor, place noise-maker, snap camera, light lantern. Per-item specs in 04-squad-and-gear.md. |
 | **Throw reagent** | 1 | 2 | Range 5 tiles, needs LOS (open windows count). Salt vial, votive, etc. |
 | **Place reagent / ward** | 1 | 1 | On own tile or adjacent. Required for Rite setup (§9) and salt lines. |
@@ -261,18 +261,34 @@ Declaring the Recon Report wrong, re-identifying from the Journal, and committin
 At 0 HP a specialist is **Downed** (canon §7): unconscious, stable, drops everything on their tile. On Trainee–Veteran they cannot die. On **Nightmare+**, a Downed specialist struck again, or left on site at contract end, is **dead — perma** (canon §10). Medic revival (to 3 HP, once per specialist per contract) is doc 04's.
 
 ### 10.2 Carrying and Alpha victims
-Downed specialists and Alpha victims use identical carry rules (§2 Lift). Alpha victims are found Downed at seeded positions (doc 05), must be **tagged** (Interact) before they can be lifted, and count for scoring only if lowered inside the van zone. Dybbuk possession of an Alpha is doc 02's problem, and it is a good one.
+Downed specialists and Alpha victims use identical carry rules (§2 Lift). Alpha victims are found Downed at seeded positions (doc 05), are shouldered directly (Lift, 1 AP) and carried out — Bravo *is* the extraction; no tagging step, no paperwork on site. They count for scoring only if lowered inside the van zone. Dybbuk possession of an Alpha is doc 02's problem, and it is a good one.
 
 ### 10.3 Extraction and contract end
 The **van zone** (3–4 exterior tiles at the site entrance) is outside the ghost's tether: no ghost senses, effects, or entry. The contract ends when:
 
 | End state | Condition | Result |
 |---|---|---|
-| **Banished & clear** | Rite completed, all mobile specialists in van zone | Full success |
+| **Banished & clear** | Rite completed, all mobile specialists in van zone before the Collapse ends | Full success |
+| **Collapsed** | The Collapse (§10.5) finishes with anyone still inside | Entity banished, crew lost — hazard pay only |
 | **Withdraw** | Player extracts all mobile specialists without completing the Rite | Partial failure: 25% call-out fee if ≥2 Tells logged, else 0; Standing penalty; site stays on the board |
 | **Contract failed** | All specialists Downed | No fee; Standing penalty; on ≤Veteran the crew is recovered (hospital downtime, doc 06); on Nightmare+ they are gone |
 
 Specialists left behind (Downed, not carried out) on ≤Veteran are recovered for a **−200 Payout fee** and roster downtime.
+
+### 10.5 The Collapse — the site lets go
+
+The entity is what held the place together. When the Rite completes, the
+Anchor breaks and the building starts coming down: a **10-round countdown**
+replaces the Dread dial. Each round, rubble spreads outward from the Anchor
+(tiles become impassable), room lights fail, and anyone standing where the
+ceiling gives takes **2 HP** and is shoved clear. When the countdown expires,
+everyone still inside is lost.
+
+This is deliberate: it converts the Alpha rescue from a post-victory errand
+into a decision made *during* the contract, under the entity's pressure.
+Fetching the casualty early costs you tempo while the ghost still hunts;
+leaving it until after the banishment is a race you can lose. Debrief adds
+**+120 Cleared the collapse** and **−200 Alpha left on site**.
 
 ### 10.4 Scoring (v0.1 targets)
 
@@ -298,7 +314,7 @@ Standard difficulty: the report is correct (canon §10). Squad: **VANCE** (Ritua
 
 *We join at Turn 9.* The squad has swept the ground floor. Journal: "faster in cold rooms" (LIS, T4), "no lights touched" (T7) — consistent with Hantu. The Anchor hum led them to the cellar; VANCE inspected a child's winter coat on a shelf: **Anchor confirmed**. One Alpha victim lies Downed in the back bedroom. The furnace is in the mudroom, off. **Dread 46 · Composure: VANCE 71, OKAFOR 84, LIS 58.**
 
-**T9 — Player:** OKAFOR interacts with the furnace (heat restoration begins; +2 Dread queued) and Moves toward the cellar stairs. VANCE Moves twice, reaching the cellar. LIS Moves to the back bedroom and tags the Alpha. **Ghost:** cabinet slam ring in the kitchen (OKAFOR hears it — ghost position roughly known). Dread 46+2+2 = **50 → Malice event:** a door slams beside LIS, the lowest-Composure specialist. LIS 58→50.
+**T9 — Player:** OKAFOR interacts with the furnace (heat restoration begins; +2 Dread queued) and Moves toward the cellar stairs. VANCE Moves twice, reaching the cellar. LIS Moves to the back bedroom, reaching the Alpha. **Ghost:** cabinet slam ring in the kitchen (OKAFOR hears it — ghost position roughly known). Dread 46+2+2 = **50 → Malice event:** a door slams beside LIS, the lowest-Composure specialist. LIS 58→50.
 
 **T10 — Player:** VANCE places brazier coal #1 at the Anchor. OKAFOR reaches the cellar doorway and lays a **salt line** (Deterrent) across it. LIS lifts the Alpha and carries 3 tiles toward the hall. **Ghost:** whisper ring drifting from kitchen toward the cellar — it feels the interference. Dread **52**.
 
