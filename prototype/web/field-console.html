@@ -1491,12 +1491,37 @@ function floorTex(){return tex("floor",(g,w,h)=>{
       g.beginPath();g.moveTo(x,y);g.lineTo(x,y+16);g.stroke()}}
   noise(g,w,h,.10)})}
 function wallTex(){return tex("wall",(g,w,h)=>{
-  g.fillStyle="#9a948c";g.fillRect(0,0,w,h);noise(g,w,h,.13,1400);
-  g.strokeStyle="rgba(0,0,0,.15)";
-  for(let i=0;i<5;i++){g.beginPath();
+  g.fillStyle="#9a948c";g.fillRect(0,0,w,h);
+  for(let i=0;i<160;i++){                       // plaster mottling
+    g.fillStyle="rgba("+(Math.random()<.5?"0,0,0":"255,255,255")+","+
+      (Math.random()*0.12)+")";
+    g.beginPath();g.arc(Math.random()*w,Math.random()*h,
+      2+Math.random()*9,0,7);g.fill()}
+  noise(g,w,h,.16,1800);
+  g.strokeStyle="rgba(0,0,0,.28)";g.lineWidth=1.4;
+  for(let i=0;i<7;i++){g.beginPath();                    // hairline cracks
     let x=Math.random()*w,y=0;g.moveTo(x,y);
-    while(y<h){x+=(Math.random()-0.5)*14;y+=10+Math.random()*14;g.lineTo(x,y)}
-    g.stroke()}})}
+    while(y<h){x+=(Math.random()-0.5)*16;y+=8+Math.random()*13;g.lineTo(x,y)}
+    g.stroke()}
+  g.lineWidth=1;
+  g.fillStyle="rgba(0,0,0,.30)";g.fillRect(0,h-13,w,13);  // skirting shadow
+  g.fillStyle="rgba(255,255,255,.06)";g.fillRect(0,h-13,w,3)})}
+function doorTex(){return tex("door",(g,w,h)=>{
+  g.fillStyle="#6B5B3E";g.fillRect(0,0,w,h);
+  for(let i=0;i<3;i++){                                   // four vertical boards
+    g.strokeStyle="rgba(0,0,0,.45)";g.beginPath();
+    g.moveTo((i+1)*w/4,0);g.lineTo((i+1)*w/4,h);g.stroke()}
+  for(let i=0;i<90;i++){                                   // grain
+    g.strokeStyle="rgba(0,0,0,"+(Math.random()*0.18)+")";
+    const y=Math.random()*h;g.beginPath();g.moveTo(0,y);
+    g.bezierCurveTo(w*0.3,y+3,w*0.6,y-3,w,y);g.stroke()}
+  g.strokeStyle="rgba(0,0,0,.5)";g.lineWidth=5;
+  g.strokeRect(9,9,w-18,h-18);                             // inset panel
+  g.lineWidth=1;
+  g.fillStyle="rgba(255,255,255,.10)";g.fillRect(11,11,w-22,4);
+  g.fillStyle="#C8B98A";                                   // handle
+  g.beginPath();g.arc(w-20,h/2,5.5,0,7);g.fill();
+  noise(g,w,h,.10,700)})}
 function grassTex(){return tex("grass",(g,w,h)=>{
   g.fillStyle="#1B2126";g.fillRect(0,0,w,h);
   for(let i=0;i<70;i++){g.fillStyle="rgba(255,255,255,"+(Math.random()*0.03)+")";
@@ -1783,19 +1808,21 @@ function buildStatic(){
       new THREE.MeshLambertMaterial({map:floorTex(),color:0x8d8272}));
       pad.rotation.x=-Math.PI/2;pad.position.set(x+0.5,0.001,y+0.5);
       pad.receiveShadow=true;G.add(pad);
-      const grp=new THREE.Group();
-      const horizontal=site.kind[(x-1)+","+y]==="wall"||site.kind[(x+1)+","+y]==="wall";
-      const panel=box(horizontal?0.14:0.92,0.82,horizontal?0.92:0.14,0x6B5B3E);
-      panel.position.y=0.41;
-      // hinge at one edge
-      panel.position[horizontal?"z":"x"]=0.44;
-      const hinge=new THREE.Group();hinge.add(panel);
-      hinge.position.set(x+0.5,0,y+0.5-(horizontal?0.44:0));
-      if(!horizontal)hinge.position.x-=0.44;
-      grp.add(hinge);G.add(grp);
-      R.doors[k]={hinge,horizontal,open:0}}
+      // A door fills the gap in its wall line: if the neighbours left and
+      // right are wall, the leaf spans X; otherwise it spans Z. (This was
+      // inverted, which stood every leaf across the doorway sideways.)
+      const spanX=site.kind[(x-1)+","+y]==="wall"||site.kind[(x+1)+","+y]==="wall";
+      const leaf=box(spanX?0.9:0.11,0.82,spanX?0.11:0.9,0xffffff,doorTex());
+      leaf.position.set(spanX?-0.45:0,0.41,spanX?0:-0.45);
+      const hinge=new THREE.Group();
+      hinge.position.set(x+0.5+(spanX?0.45:0),0,y+0.5+(spanX?0:0.45));
+      hinge.add(leaf);
+      const jamb=box(spanX?0.1:0.16,0.9,spanX?0.16:0.1,0x5A4B33);
+      jamb.position.set(x+0.5+(spanX?0.47:0),0.45,y+0.5+(spanX?0:0.47));
+      G.add(hinge,jamb);
+      R.doors[k]={hinge,spanX,sign:((x+y)%2?1:-1),open:0}}
     else if(kind==="wall"){const m=box(1,0.92,1,0x8F8A80,wallTex(),
-        {transparent:true,opacity:0.5,depthWrite:false});
+        {transparent:true,opacity:0.62,depthWrite:false});
       m.position.set(x+0.5,0.46,y+0.5);G.add(m);reg(m,x,y)}
     else if(kind==="window"){
       const b=box(1,0.42,1,0x8F8A80,wallTex(),
@@ -2216,6 +2243,7 @@ function sceneSync(){if(!R||!sim)return;
     u.ring.visible=sel===s;
     u.burden.visible=!!s.carrying;
     u.tag.material.opacity=s.hidden?0.4:1}
+  SND.updateAmbients();
   // Alpha: lying where they fell — or standing, if something wears them
   const showAlpha=!sim.alpha.rescued&&sim.alpha.carriedBy==null&&
     (seenAt(sim.alpha.pos)||sim.hosted);
@@ -2285,8 +2313,8 @@ function frame(now){requestAnimationFrame(frame);
   for(const d of Object.values(R.doors)){
     d.open=d.open??0;const tg=d.target??0;
     d.open+=(tg-d.open)*(REDUCED?1:0.18);
-    d.hinge.rotation.y=(d.horizontal?-1:1)*d.open*1.75;
-    d.hinge.children[0].material.color.setHex(d.jam?0x7A4A42:0x6B5B3E)}
+    d.hinge.rotation.y=d.sign*d.open*1.62;
+    d.hinge.children[0].material.color.setHex(d.jam?0xB07268:0xffffff)}
   // marker bob
   R.dynG.traverse(o=>{if(o.userData&&o.userData.bob&&!REDUCED)
     o.position.y=1.0+Math.sin(now*0.0028+o.position.x)*0.07});
@@ -2303,7 +2331,7 @@ function frame(now){requestAnimationFrame(frame);
   if(!REDUCED)for(const nm in R.roomLights){const L=R.roomLights[nm];
     const f=Math.sin(now*0.011+nm.length*2.1)*Math.sin(now*0.0037+nm.length);
     L.intensity=1.35*(0.86+0.14*f)*(1-0.25*(sim.dread/100))}
-  SND.update(now);
+  SND.update(now);SND.ambientTick(now);
   // floating world-space popups
   R.pops=(R.pops||[]).filter(p=>{const age=(now-p.t0)/1100;
     if(age>=1){R.fxG2&&R.fxG2.remove(p.spr);R.scene.remove(p.spr);return false}
@@ -2383,6 +2411,7 @@ function flash(){const f=$("#flash");f.classList.add("on");
 function draw(){sceneSync()}
 // ================= procedural sound (WebAudio, no assets) =================
 const SND={ctx:null,muted:false,_u:0,_hb:0,
+ amb:{},fireAud:0,dripAud:0,
  init(){if(this.ctx)return;
   try{
    const C=this.ctx=new(window.AudioContext||window.webkitAudioContext)();
@@ -2471,6 +2500,72 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
   if(k==="wood"||k==="wooddark")
     this.osc(90+Math.random()*40,0.09,"triangle",0.02,-18,pan)},
  thump(vol){this.osc(62,0.22,"sine",vol,-28)},
+ // How loud is a thing at that tile for the people actually on site? Uses
+ // the sim's own propagation: -1 per tile, -3 per closed door, walls block.
+ audibility(pos,noise){if(!sim||!pos)return 0;
+  const n=noise||7;
+  const heard=sim.site.loudness(pos,n);
+  let best=0;
+  for(const s of sim.squad){if(!s.mobile())continue;
+    const v=heard[s.pos[0]+","+s.pos[1]]||0;if(v>best)best=v}
+  return Math.min(1,best/n)},
+ bed(id,freq,q,type){const C=this.ctx;
+  if(!C)return null;
+  if(this.amb[id])return this.amb[id];
+  const s=C.createBufferSource();s.buffer=this.noiseBuf;s.loop=true;
+  const f=C.createBiquadFilter();f.type=type||"bandpass";
+  f.frequency.value=freq;f.Q.value=q||0.7;
+  const g=C.createGain();g.gain.value=0;
+  s.connect(f);f.connect(g);
+  let tail=g,pan=null;
+  if(C.createStereoPanner){pan=C.createStereoPanner();g.connect(pan);tail=pan}
+  tail.connect(this.master);
+  const w=C.createGain();w.gain.value=0.3;tail.connect(w);w.connect(this.conv);
+  s.start();
+  return this.amb[id]={g,pan,s}},
+ hum(id,freq){const C=this.ctx;
+  if(!C)return null;
+  if(this.amb[id])return this.amb[id];
+  const o=C.createOscillator();o.type="sawtooth";o.frequency.value=freq;
+  const o2=C.createOscillator();o2.type="sine";o2.frequency.value=freq*2.02;
+  const f=C.createBiquadFilter();f.type="lowpass";f.frequency.value=380;
+  const g=C.createGain();g.gain.value=0;
+  o.connect(f);o2.connect(f);f.connect(g);
+  let tail=g,pan=null;
+  if(C.createStereoPanner){pan=C.createStereoPanner();g.connect(pan);tail=pan}
+  tail.connect(this.master);
+  o.start();o2.start();
+  return this.amb[id]={g,pan}},
+ setAmb(id,gain,pan){const a=this.amb[id];if(!a||!this.ctx)return;
+  a.g.gain.setTargetAtTime(this.muted?0:gain,this.ctx.currentTime,0.25);
+  if(a.pan)a.pan.pan.value=Math.max(-1,Math.min(1,pan||0))},
+ // every ambient bed belongs to an object on the map, never to "the level"
+ updateAmbients(){const C=this.ctx;if(!C||!sim)return;
+  const site=sim.site;
+  this.bed("fire",620,0.8);this.bed("lamp",2600,1.1);
+  this.bed("wind",300,0.5);this.hum("mains",50);
+  const set=(id,pos,on,vol)=>{
+    const a=on?this.audibility(pos,7):0;
+    this.setAmb(id,a*vol,this.panOf(pos));
+    return a};
+  this.fireAud=set("fire",FURNACE,site.furnaceOn,0.30);
+  set("mains",BREAKER,site.breakerOn,0.045);
+  const lamp=site.lanterns[0];
+  set("lamp",lamp||FURNACE,!!lamp,0.05);
+  const win=WINDOWS.find(p=>site.windowOpen[p[0]+","+p[1]]);
+  set("wind",win||FURNACE,!!win,0.13);
+  this.dripAud=this.audibility([20,6],6)},
+ // crackles and drips are events, not loops — they only fire when heard
+ ambientTick(now){const C=this.ctx;if(!C||this.muted||!sim)return;
+  if(this.fireAud>0.08&&now>(this._fire||0)){
+    this._fire=now+180+Math.random()*520;
+    this.hiss(0.05+Math.random()*0.06,0.02*this.fireAud,
+      900+Math.random()*1400,this.panOf(FURNACE),3.0)}
+  if(this.dripAud>0.12&&now>(this._drip||0)){
+    this._drip=now+2200+Math.random()*3600;
+    this.osc(1500,0.05,"sine",0.02*this.dripAud,-900,this.panOf([20,6]));
+    setTimeout(()=>this.hiss(0.07,0.012*this.dripAud,2600,
+      this.panOf([20,6]),2.0),40)}},
  ghostTone(){const T={hantu:196,demon:104,mare:147,jinn:262,wraith:175,
    yurei:233,poltergeist:311,banshee:392,revenant:131,shade:208,draugr:87,
    dybbuk:156};
@@ -2482,7 +2577,12 @@ const SND={ctx:null,muted:false,_u:0,_hb:0,
     this.hiss(1.6,0.10,180,0,0.5);
     setTimeout(()=>this.hiss(0.6,0.06,900,0,0.7),260);break;
   case"tap":this.osc(880,0.05,"triangle",0.025);break;
-  case"door":this.osc(96,0.22,"sawtooth",0.035,-30);break;
+  case"door":{const p2=pan;
+    this.hiss(0.34,0.045,240,p2,1.4);                  // the hinge complains
+    this.osc(150+Math.random()*60,0.30,"sawtooth",0.020,-52,p2,900);
+    setTimeout(()=>{this.osc(2100,0.035,"square",0.020,-600,p2);
+      this.hiss(0.05,0.03,3200,p2,2.2)},300);          // the latch
+    break}
   case"ev":{const g0=this.ghostTone();
     this.osc(g0*2+Math.random()*40,0.5,"sine",0.035,-160,pan);
     this.osc(g0*3,0.35,"triangle",0.012,-60,pan);
@@ -2871,7 +2971,7 @@ $("#tutSkip").onclick=tutEnd;
 $("#btnTut").onclick=tutStart;
 addEventListener("resize",()=>{layoutHUD();
   if(R&&sim&&$("#play").classList.contains("on"))resize3D()});
-window._dbg={get sim(){return sim},get R(){return R},tap:tapTile,end:endTurn,sel:(n)=>{sel=sim.spec(n);renderAll()}};
+window._dbg={get sim(){return sim},get R(){return R},get snd(){return SND},tap:tapTile,end:endTurn,sel:(n)=>{sel=sim.spec(n);renderAll()}};
 newContract();
 })()}
 
